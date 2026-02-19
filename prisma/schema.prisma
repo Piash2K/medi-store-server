@@ -18,6 +18,14 @@ enum Status {
   UNBAN
 }
 
+enum OrderStatus {
+  PLACED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -28,6 +36,102 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
+  medicines Medicine[]
+  orders    Order[]
+  reviews   Review[]
+
+  @@index([email])
   @@index([status])
   @@map("users")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  medicines Medicine[]
+
+  @@map("categories")
+}
+
+model Medicine {
+  id           String   @id @default(uuid())
+  name         String
+  description  String
+  manufacturer String
+  price        Float
+  stock        Int
+  categoryId   String
+  sellerId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  seller     User @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  reviews    Review[]
+
+  @@index([categoryId])
+  @@index([sellerId])
+  @@map("medicines")
+}
+
+model Order {
+  id              String   @id @default(uuid())
+  customerId      String
+  status          OrderStatus @default(PLACED)
+  shippingAddress String
+  totalAmount     Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    OrderItem[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  medicineId String
+  quantity  Int
+  price     Float
+  createdAt DateTime @default(now())
+
+  // Relations
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  medicine Medicine @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([medicineId])
+  @@map("order_items")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  medicineId String
+  customerId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  medicine Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([medicineId, customerId])
+  @@index([medicineId])
+  @@index([customerId])
+  @@map("reviews")
 }
