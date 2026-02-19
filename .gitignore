@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+generated
+coverage
+.DS_Store
