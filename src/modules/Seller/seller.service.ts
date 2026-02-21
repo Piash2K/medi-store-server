@@ -72,6 +72,99 @@ const addMedicineIntoDB = async (payload: CreateMedicinePayload) => {
   return result;
 };
 
+type UpdateMedicinePayload = {
+  medicineId: string;
+  sellerId: string;
+  name?: string;
+  description?: string;
+  manufacturer?: string;
+  price?: number;
+  stock?: number;
+  categoryId?: string;
+};
+
+const updateMedicineIntoDB = async (payload: UpdateMedicinePayload) => {
+  const medicine = await prisma.medicine.findUnique({
+    where: {
+      id: payload.medicineId,
+    },
+    select: {
+      id: true,
+      sellerId: true,
+      isDeleted: true,
+    },
+  });
+
+  if (!medicine) {
+    throw new Error("Medicine not found");
+  }
+
+  if (medicine.isDeleted) {
+    throw new Error("Cannot update a deleted medicine");
+  }
+
+  if (medicine.sellerId !== payload.sellerId) {
+    throw new Error("You can only update your own medicines");
+  }
+
+  const seller = await prisma.user.findUnique({
+    where: {
+      id: payload.sellerId,
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!seller || seller.status === "BAN") {
+    throw new Error("Seller account is banned or not found");
+  }
+
+  if (payload.categoryId) {
+    const category = await prisma.category.findUnique({
+      where: {
+        id: payload.categoryId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!category) {
+      throw new Error("Category not found");
+    }
+  }
+
+  const updateData: any = {};
+  if (payload.name !== undefined) updateData.name = payload.name;
+  if (payload.description !== undefined) updateData.description = payload.description;
+  if (payload.manufacturer !== undefined) updateData.manufacturer = payload.manufacturer;
+  if (payload.price !== undefined) updateData.price = Number(payload.price);
+  if (payload.stock !== undefined) updateData.stock = Number(payload.stock);
+  if (payload.categoryId !== undefined) updateData.categoryId = payload.categoryId;
+
+  const result = await prisma.medicine.update({
+    where: {
+      id: payload.medicineId,
+    },
+    data: updateData,
+    include: {
+      category: true,
+      seller: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return result;
+};
+
 export const SellerService = {
   addMedicineIntoDB,
+  updateMedicineIntoDB,
 };
