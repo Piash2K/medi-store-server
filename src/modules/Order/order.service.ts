@@ -148,6 +148,52 @@ const createOrderIntoDB = async (payload: CreateOrderPayload) => {
   return result;
 };
 
+const getUserOrdersFromDB = async (customerId: string) => {
+  const customer = await prisma.user.findUnique({
+    where: {
+      id: customerId,
+    },
+    select: {
+      id: true,
+      role: true,
+    },
+  });
+
+  if (!customer) {
+    throw new Error("Customer not found");
+  }
+
+  if (customer.role !== "CUSTOMER") {
+    throw new Error("Only customers can view orders");
+  }
+
+  const orders = await prisma.order.findMany({
+    where: {
+      customerId,
+    },
+    include: {
+      items: {
+        include: {
+          medicine: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              manufacturer: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return orders;
+};
+
 export const OrderService = {
   createOrderIntoDB,
+  getUserOrdersFromDB,
 };
