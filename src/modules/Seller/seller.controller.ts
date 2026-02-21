@@ -3,18 +3,17 @@ import { SellerService } from "./seller.service";
 
 const addMedicine = async (req: Request, res: Response) => {
   try {
-    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
-    if (!sellerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "sellerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
     const result = await SellerService.addMedicineIntoDB({
       ...req.body,
-      sellerId,
+      sellerId: req.user.id,
     });
 
     res.status(201).json({
@@ -32,20 +31,19 @@ const addMedicine = async (req: Request, res: Response) => {
 
 const updateMedicine = async (req: Request, res: Response) => {
   try {
-    const medicineId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
-    if (!sellerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "sellerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
+    const medicineId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const result = await SellerService.updateMedicineIntoDB({
       medicineId,
       ...req.body,
-      sellerId,
+      sellerId: req.user.id,
     });
 
     res.status(200).json({
@@ -63,19 +61,18 @@ const updateMedicine = async (req: Request, res: Response) => {
 
 const deleteMedicine = async (req: Request, res: Response) => {
   try {
-    const medicineId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
-    if (!sellerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "sellerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
+    const medicineId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const result = await SellerService.deleteMedicineFromDB({
       medicineId,
-      sellerId,
+      sellerId: req.user.id,
     });
 
     res.status(200).json({
@@ -93,17 +90,15 @@ const deleteMedicine = async (req: Request, res: Response) => {
 
 const getSellerOrders = async (req: Request, res: Response) => {
   try {
-    const sellerId = (req.query.sellerId as string | undefined) ?? req.user?.id;
-
-    if (!sellerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "sellerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
-    const result = await SellerService.getSellerOrdersFromDB(sellerId);
+    const result = await SellerService.getSellerOrdersFromDB(req.user.id);
 
     res.status(200).json({
       success: true,
@@ -120,20 +115,19 @@ const getSellerOrders = async (req: Request, res: Response) => {
 
 const updateOrderStatus = async (req: Request, res: Response) => {
   try {
-    const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
-    if (!sellerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "sellerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
+    const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const result = await SellerService.updateOrderStatusIntoDB({
       orderId,
       ...req.body,
-      sellerId,
+      sellerId: req.user.id,
     });
 
     res.status(200).json({

@@ -3,17 +3,15 @@ import { AdminService } from "./admin.service";
 
 const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const adminId = (req.query.adminId as string | undefined) ?? req.user?.id;
-
-    if (!adminId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "adminId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
-    const result = await AdminService.getAllUsersFromDB(adminId);
+    const result = await AdminService.getAllUsersFromDB(req.user.id);
 
     res.status(200).json({
       success: true,
@@ -30,20 +28,19 @@ const getAllUsers = async (req: Request, res: Response) => {
 
 const updateUserStatus = async (req: Request, res: Response) => {
   try {
-    const userId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const adminId = (req.body.adminId as string | undefined) ?? req.user?.id;
-    if (!adminId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "adminId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
+    const userId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const result = await AdminService.updateUserStatusIntoDB({
       userId,
       ...req.body,
-      adminId,
+      adminId: req.user.id,
     });
 
     res.status(200).json({

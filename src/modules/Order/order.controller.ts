@@ -3,18 +3,17 @@ import { OrderService } from "./order.service";
 
 const createOrder = async (req: Request, res: Response) => {
   try {
-    const customerId = (req.body.customerId as string | undefined) ?? req.user?.id;
-    if (!customerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "customerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
     const result = await OrderService.createOrderIntoDB({
       ...req.body,
-      customerId,
+      customerId: req.user.id,
     });
 
     res.status(201).json({
@@ -32,17 +31,15 @@ const createOrder = async (req: Request, res: Response) => {
 
 const getUserOrders = async (req: Request, res: Response) => {
   try {
-    const customerId = (req.query.customerId as string | undefined) ?? req.user?.id;
-
-    if (!customerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "customerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
-    const result = await OrderService.getUserOrdersFromDB(customerId);
+    const result = await OrderService.getUserOrdersFromDB(req.user.id);
 
     res.status(200).json({
       success: true,
@@ -60,17 +57,15 @@ const getUserOrders = async (req: Request, res: Response) => {
 const getSingleOrder = async (req: Request, res: Response) => {
   try {
     const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const customerId = (req.query.customerId as string | undefined) ?? req.user?.id;
-
-    if (!customerId) {
-      res.status(400).json({
+    if (!req.user) {
+      res.status(401).json({
         success: false,
-        message: "customerId is required",
+        message: "Unauthorized",
       });
       return;
     }
 
-    const result = await OrderService.getSingleOrderFromDB(orderId, customerId);
+    const result = await OrderService.getSingleOrderFromDB(orderId, req.user.id);
 
     res.status(200).json({
       success: true,
