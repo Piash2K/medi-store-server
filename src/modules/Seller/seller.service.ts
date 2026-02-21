@@ -164,7 +164,62 @@ const updateMedicineIntoDB = async (payload: UpdateMedicinePayload) => {
   return result;
 };
 
+type DeleteMedicinePayload = {
+  medicineId: string;
+  sellerId: string;
+};
+
+const deleteMedicineFromDB = async (payload: DeleteMedicinePayload) => {
+  const medicine = await prisma.medicine.findUnique({
+    where: {
+      id: payload.medicineId,
+    },
+    select: {
+      id: true,
+      sellerId: true,
+      isDeleted: true,
+    },
+  });
+
+  if (!medicine) {
+    throw new Error("Medicine not found");
+  }
+
+  if (medicine.isDeleted) {
+    throw new Error("Medicine already deleted");
+  }
+
+  if (medicine.sellerId !== payload.sellerId) {
+    throw new Error("You can only delete your own medicines");
+  }
+
+  const seller = await prisma.user.findUnique({
+    where: {
+      id: payload.sellerId,
+    },
+    select: {
+      status: true,
+    },
+  });
+
+  if (!seller || seller.status === "BAN") {
+    throw new Error("Seller account is banned or not found");
+  }
+
+  const result = await prisma.medicine.update({
+    where: {
+      id: payload.medicineId,
+    },
+    data: {
+      isDeleted: true,
+    },
+  });
+
+  return result;
+};
+
 export const SellerService = {
   addMedicineIntoDB,
   updateMedicineIntoDB,
+  deleteMedicineFromDB,
 };
