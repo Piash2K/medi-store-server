@@ -13,7 +13,10 @@ const getAllMedicinesFromDB = async (query: Record<string, unknown>) => {
     sortOrder = "desc",
   } = query;
 
-  const whereConditions: Record<string, unknown>[] = [{ stock: { gt: 0 } }];
+  const whereConditions: Record<string, unknown>[] = [
+    { stock: { gt: 0 } },
+    { isDeleted: false },
+  ];
 
   if (searchTerm && typeof searchTerm === "string") {
     whereConditions.push({
@@ -116,8 +119,11 @@ const getAllMedicinesFromDB = async (query: Record<string, unknown>) => {
 };
 
 const getSingleMedicineFromDB = async (id: string) => {
-  const medicine = await prisma.medicine.findUnique({
-    where: { id },
+  const medicine = await prisma.medicine.findFirst({
+    where: {
+      id,
+      isDeleted: false,
+    },
     include: {
       category: true,
       seller: {

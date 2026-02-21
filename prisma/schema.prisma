@@ -26,11 +26,17 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum PaymentMethod {
+  COD
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
   password  String
+  phone     String?  @unique
+  address   String?
   role      Role     @default(CUSTOMER)
   status    Status   @default(UNBAN)
   createdAt DateTime @default(now())
@@ -66,6 +72,7 @@ model Medicine {
   manufacturer String
   price        Float
   stock        Int
+  isDeleted    Boolean  @default(false)
   categoryId   String
   sellerId     String
   createdAt    DateTime @default(now())
@@ -79,6 +86,7 @@ model Medicine {
 
   @@index([categoryId])
   @@index([sellerId])
+  @@index([isDeleted])
   @@map("medicines")
 }
 
@@ -86,6 +94,7 @@ model Order {
   id              String   @id @default(uuid())
   customerId      String
   status          OrderStatus @default(PLACED)
+  paymentMethod   PaymentMethod @default(COD)
   shippingAddress String
   totalAmount     Float
   createdAt       DateTime @default(now())
