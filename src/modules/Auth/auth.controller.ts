@@ -32,7 +32,41 @@ const loginUser = async (req: Request, res: Response) => {
   }
 };
 
+const getMe = async (req: Request, res: Response) => {
+  try {
+    if (req.user) {
+      res.status(200).json({
+        success: true,
+        message: "User fetched successfully",
+        data: req.user,
+      });
+      return;
+    }
+
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : undefined;
+    const cookieToken = (req as any).cookies?.token as string | undefined;
+    const token = bearerToken || cookieToken || "";
+
+    const result = await AuthService.getMeFromDB(token);
+
+    res.status(200).json({
+      success: true,
+      message: "User fetched successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(401).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const AuthController = {
   createUser,
   loginUser,
+  getMe,
 };

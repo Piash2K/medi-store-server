@@ -3,12 +3,12 @@ import { AdminService } from "./admin.service";
 
 const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const { adminId } = req.query;
+    const adminId = (req.query.adminId as string | undefined) ?? req.user?.id;
 
-    if (!adminId || typeof adminId !== "string") {
+    if (!adminId) {
       res.status(400).json({
         success: false,
-        message: "adminId is required as query parameter",
+        message: "adminId is required",
       });
       return;
     }
@@ -31,9 +31,19 @@ const getAllUsers = async (req: Request, res: Response) => {
 const updateUserStatus = async (req: Request, res: Response) => {
   try {
     const userId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const adminId = (req.body.adminId as string | undefined) ?? req.user?.id;
+    if (!adminId) {
+      res.status(400).json({
+        success: false,
+        message: "adminId is required",
+      });
+      return;
+    }
+
     const result = await AdminService.updateUserStatusIntoDB({
       userId,
       ...req.body,
+      adminId,
     });
 
     res.status(200).json({

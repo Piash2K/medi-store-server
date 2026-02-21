@@ -3,7 +3,19 @@ import { OrderService } from "./order.service";
 
 const createOrder = async (req: Request, res: Response) => {
   try {
-    const result = await OrderService.createOrderIntoDB(req.body);
+    const customerId = (req.body.customerId as string | undefined) ?? req.user?.id;
+    if (!customerId) {
+      res.status(400).json({
+        success: false,
+        message: "customerId is required",
+      });
+      return;
+    }
+
+    const result = await OrderService.createOrderIntoDB({
+      ...req.body,
+      customerId,
+    });
 
     res.status(201).json({
       success: true,
@@ -20,12 +32,12 @@ const createOrder = async (req: Request, res: Response) => {
 
 const getUserOrders = async (req: Request, res: Response) => {
   try {
-    const { customerId } = req.query;
+    const customerId = (req.query.customerId as string | undefined) ?? req.user?.id;
 
-    if (!customerId || typeof customerId !== "string") {
+    if (!customerId) {
       res.status(400).json({
         success: false,
-        message: "customerId is required as query parameter",
+        message: "customerId is required",
       });
       return;
     }
@@ -48,12 +60,12 @@ const getUserOrders = async (req: Request, res: Response) => {
 const getSingleOrder = async (req: Request, res: Response) => {
   try {
     const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const { customerId } = req.query;
+    const customerId = (req.query.customerId as string | undefined) ?? req.user?.id;
 
-    if (!customerId || typeof customerId !== "string") {
+    if (!customerId) {
       res.status(400).json({
         success: false,
-        message: "customerId is required as query parameter",
+        message: "customerId is required",
       });
       return;
     }

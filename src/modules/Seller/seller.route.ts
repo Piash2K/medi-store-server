@@ -1,7 +1,10 @@
 import express from "express";
 import { SellerController } from "./seller.controller";
+import { auth } from "../../middlewares/auth";
 
 const router = express.Router();
+
+router.use(auth("SELLER"));
 
 router.post("/medicines", SellerController.addMedicine);
 router.put("/medicines/:id", SellerController.updateMedicine);

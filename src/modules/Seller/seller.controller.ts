@@ -3,7 +3,19 @@ import { SellerService } from "./seller.service";
 
 const addMedicine = async (req: Request, res: Response) => {
   try {
-    const result = await SellerService.addMedicineIntoDB(req.body);
+    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
+    if (!sellerId) {
+      res.status(400).json({
+        success: false,
+        message: "sellerId is required",
+      });
+      return;
+    }
+
+    const result = await SellerService.addMedicineIntoDB({
+      ...req.body,
+      sellerId,
+    });
 
     res.status(201).json({
       success: true,
@@ -21,9 +33,19 @@ const addMedicine = async (req: Request, res: Response) => {
 const updateMedicine = async (req: Request, res: Response) => {
   try {
     const medicineId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
+    if (!sellerId) {
+      res.status(400).json({
+        success: false,
+        message: "sellerId is required",
+      });
+      return;
+    }
+
     const result = await SellerService.updateMedicineIntoDB({
       medicineId,
       ...req.body,
+      sellerId,
     });
 
     res.status(200).json({
@@ -42,9 +64,18 @@ const updateMedicine = async (req: Request, res: Response) => {
 const deleteMedicine = async (req: Request, res: Response) => {
   try {
     const medicineId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
+    if (!sellerId) {
+      res.status(400).json({
+        success: false,
+        message: "sellerId is required",
+      });
+      return;
+    }
+
     const result = await SellerService.deleteMedicineFromDB({
       medicineId,
-      sellerId: req.body.sellerId,
+      sellerId,
     });
 
     res.status(200).json({
@@ -62,12 +93,12 @@ const deleteMedicine = async (req: Request, res: Response) => {
 
 const getSellerOrders = async (req: Request, res: Response) => {
   try {
-    const { sellerId } = req.query;
+    const sellerId = (req.query.sellerId as string | undefined) ?? req.user?.id;
 
-    if (!sellerId || typeof sellerId !== "string") {
+    if (!sellerId) {
       res.status(400).json({
         success: false,
-        message: "sellerId is required as query parameter",
+        message: "sellerId is required",
       });
       return;
     }
@@ -90,9 +121,19 @@ const getSellerOrders = async (req: Request, res: Response) => {
 const updateOrderStatus = async (req: Request, res: Response) => {
   try {
     const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const sellerId = (req.body.sellerId as string | undefined) ?? req.user?.id;
+    if (!sellerId) {
+      res.status(400).json({
+        success: false,
+        message: "sellerId is required",
+      });
+      return;
+    }
+
     const result = await SellerService.updateOrderStatusIntoDB({
       orderId,
       ...req.body,
+      sellerId,
     });
 
     res.status(200).json({

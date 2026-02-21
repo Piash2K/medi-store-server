@@ -34,7 +34,44 @@ const loginUserIntoDB = async (payload: any) => {
     return { ...rest, token };
 };
 
+const getMeFromDB = async (token: string) => {
+    if (!token) {
+        throw new Error("Unauthorized");
+    }
+
+    let decoded: any;
+    try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET_KEY as string);
+    } catch (error) {
+        throw new Error("Invalid token");
+    }
+
+    const user = await prisma.user.findUnique({
+        where: {
+            id: decoded.id
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            address: true,
+            role: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true
+        }
+    });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    return user;
+};
+
 export const AuthService = {
   createUserIntoDB,
-  loginUserIntoDB
+    loginUserIntoDB,
+    getMeFromDB
 };
