@@ -287,9 +287,122 @@ const getSellerOrdersFromDB = async (sellerId: string) => {
   return orders;
 };
 
+type UpdateOrderStatusPayload = {
+  orderId: string;
+  sellerId: string;
+  status: string;
+};
+
+const updateOrderStatusIntoDB = async (payload: UpdateOrderStatusPayload) => {
+  const seller = await prisma.user.findUnique({
+    where: {
+      id: payload.sellerId,
+    },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+    },
+  });
+
+  if (!seller) {
+    throw new Error("Seller not found");
+  }
+
+  if (seller.role !== "SELLER") {
+    throw new Error("Only sellers can update order status");
+  }
+
+  if (seller.status === "BAN") {
+    throw new Error("Seller account is banned");
+  }
+
+  const order = await prisma.order.findUnique({
+    where: {
+      id: payload.orderId,
+    },
+    include: {
+      items: {
+        include: {
+          medicine: {
+            select: {
+              sellerId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  // Check if seller has medicines in this order
+  const hasSellerMedicine = order.items.some(
+    (item) => item.medicine.sellerId === payload.sellerId
+  );
+
+  if (!hasSellerMedicine) {
+    throw new Error("You can only update orders containing your medicines");
+  }
+
+  // Validate status transitions
+  const validStatuses = ["PLACED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
+  if (!validStatuses.includes(payload.status)) {
+    throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+  }
+
+  // Validate status transition rules
+  if (order.status === "CANCELLED" || order.status === "DELIVERED") {
+    throw new Error(`Cannot update order with status ${order.status}`);
+  }
+
+  if (payload.status === "CANCELLED") {
+    throw new Error("Only customers can cancel orders");
+  }
+
+  const result = await prisma.order.update({
+    where: {
+      id: payload.orderId,
+    },
+    data: {
+      status: payload.status as any,
+    },
+    include: {
+      items: {
+        where: {
+          medicine: {
+            sellerId: payload.sellerId,
+          },
+        },
+        include: {
+          medicine: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+            },
+          },
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return result;
+};
+
 export const SellerService = {
   addMedicineIntoDB,
   updateMedicineIntoDB,
   deleteMedicineFromDB,
   getSellerOrdersFromDB,
+  updateOrderStatusIntoDB,
 };

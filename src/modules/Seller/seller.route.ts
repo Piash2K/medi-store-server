@@ -7,5 +7,6 @@ router.post("/medicines", SellerController.addMedicine);
 router.put("/medicines/:id", SellerController.updateMedicine);
 router.delete("/medicines/:id", SellerController.deleteMedicine);
 router.get("/orders", SellerController.getSellerOrders);
+router.patch("/orders/:id", SellerController.updateOrderStatus);
 
 export const SellerRoutes = router;
