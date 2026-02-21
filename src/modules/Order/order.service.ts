@@ -193,7 +193,48 @@ const getUserOrdersFromDB = async (customerId: string) => {
   return orders;
 };
 
+const getSingleOrderFromDB = async (orderId: string, customerId: string) => {
+  const order = await prisma.order.findUnique({
+    where: {
+      id: orderId,
+    },
+    include: {
+      items: {
+        include: {
+          medicine: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              manufacturer: true,
+              description: true,
+            },
+          },
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (order.customerId !== customerId) {
+    throw new Error("You can only view your own orders");
+  }
+
+  return order;
+};
+
 export const OrderService = {
   createOrderIntoDB,
   getUserOrdersFromDB,
+  getSingleOrderFromDB,
 };
