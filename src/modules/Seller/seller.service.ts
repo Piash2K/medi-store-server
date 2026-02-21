@@ -218,8 +218,78 @@ const deleteMedicineFromDB = async (payload: DeleteMedicinePayload) => {
   return result;
 };
 
+const getSellerOrdersFromDB = async (sellerId: string) => {
+  const seller = await prisma.user.findUnique({
+    where: {
+      id: sellerId,
+    },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+    },
+  });
+
+  if (!seller) {
+    throw new Error("Seller not found");
+  }
+
+  if (seller.role !== "SELLER") {
+    throw new Error("Only sellers can view orders");
+  }
+
+  if (seller.status === "BAN") {
+    throw new Error("Seller account is banned");
+  }
+
+  // Find all orders that contain items with medicines from this seller
+  const orders = await prisma.order.findMany({
+    where: {
+      items: {
+        some: {
+          medicine: {
+            sellerId: sellerId,
+          },
+        },
+      },
+    },
+    include: {
+      items: {
+        where: {
+          medicine: {
+            sellerId: sellerId,
+          },
+        },
+        include: {
+          medicine: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              manufacturer: true,
+            },
+          },
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return orders;
+};
+
 export const SellerService = {
   addMedicineIntoDB,
   updateMedicineIntoDB,
   deleteMedicineFromDB,
+  getSellerOrdersFromDB,
 };

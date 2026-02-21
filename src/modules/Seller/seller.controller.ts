@@ -60,8 +60,36 @@ const deleteMedicine = async (req: Request, res: Response) => {
   }
 };
 
+const getSellerOrders = async (req: Request, res: Response) => {
+  try {
+    const { sellerId } = req.query;
+
+    if (!sellerId || typeof sellerId !== "string") {
+      res.status(400).json({
+        success: false,
+        message: "sellerId is required as query parameter",
+      });
+      return;
+    }
+
+    const result = await SellerService.getSellerOrdersFromDB(sellerId);
+
+    res.status(200).json({
+      success: true,
+      message: "Orders fetched successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const SellerController = {
   addMedicine,
   updateMedicine,
   deleteMedicine,
+  getSellerOrders,
 };
