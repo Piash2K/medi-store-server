@@ -115,6 +115,35 @@ const getAllMedicinesFromDB = async (query: Record<string, unknown>) => {
   };
 };
 
+const getSingleMedicineFromDB = async (id: string) => {
+  const medicine = await prisma.medicine.findUnique({
+    where: { id },
+    include: {
+      category: true,
+      seller: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      reviews: {
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return medicine;
+};
+
 export const MedicineService = {
   getAllMedicinesFromDB,
+  getSingleMedicineFromDB,
 };
