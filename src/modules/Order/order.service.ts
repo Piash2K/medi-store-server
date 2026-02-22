@@ -233,8 +233,92 @@ const getSingleOrderFromDB = async (orderId: string, customerId: string) => {
   return order;
 };
 
+const cancelOrderIntoDB = async (orderId: string, customerId: string) => {
+  // Get the order
+  const order = await prisma.order.findUnique({
+    where: {
+      id: orderId,
+    },
+    include: {
+      items: {
+        include: {
+          medicine: true,
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  // Check if customer owns the order
+  if (order.customerId !== customerId) {
+    throw new Error("You can only cancel your own orders");
+  }
+
+  // Check if order can be cancelled (only PLACED and PROCESSING can be cancelled)
+  if (order.status !== "PLACED" && order.status !== "PROCESSING") {
+    throw new Error(
+      `Cannot cancel order with status ${order.status}. Only PLACED or PROCESSING orders can be cancelled.`
+    );
+  }
+
+  // Cancel order within a transaction to restore stock
+  const result = await prisma.$transaction(async (tx) => {
+    // Update order status
+    const cancelledOrder = await tx.order.update({
+      where: {
+        id: orderId,
+      },
+      data: {
+        status: "CANCELLED",
+      },
+      include: {
+        items: {
+          include: {
+            medicine: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Restore medicine stock
+    for (const item of order.items) {
+      await tx.medicine.update({
+        where: {
+          id: item.medicineId,
+        },
+        data: {
+          stock: {
+            increment: item.quantity,
+          },
+        },
+      });
+    }
+
+    return cancelledOrder;
+  });
+
+  return result;
+};
+
 export const OrderService = {
   createOrderIntoDB,
   getUserOrdersFromDB,
   getSingleOrderFromDB,
+  cancelOrderIntoDB,
 };

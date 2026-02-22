@@ -80,8 +80,35 @@ const getSingleOrder = async (req: Request, res: Response) => {
   }
 };
 
+const cancelOrder = async (req: Request, res: Response) => {
+  try {
+    const orderId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+      return;
+    }
+
+    const result = await OrderService.cancelOrderIntoDB(orderId, req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const OrderController = {
   createOrder,
   getUserOrders,
   getSingleOrder,
+  cancelOrder,
 };
