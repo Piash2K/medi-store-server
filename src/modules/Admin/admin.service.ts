@@ -174,8 +174,71 @@ const getAllMedicinesFromDB = async (adminId: string) => {
   return medicines;
 };
 
+const getAllOrdersFromDB = async (adminId: string) => {
+  const admin = await prisma.user.findUnique({
+    where: {
+      id: adminId,
+    },
+    select: {
+      id: true,
+      role: true,
+      status: true,
+    },
+  });
+
+  if (!admin) {
+    throw new Error("Admin not found");
+  }
+
+  if (admin.role !== "ADMIN") {
+    throw new Error("Only admins can view all orders");
+  }
+
+  if (admin.status === "BAN") {
+    throw new Error("Admin account is banned");
+  }
+
+  const orders = await prisma.order.findMany({
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+      items: {
+        include: {
+          medicine: {
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              manufacturer: true,
+              seller: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return orders;
+};
+
 export const AdminService = {
   getAllUsersFromDB,
   updateUserStatusIntoDB,
   getAllMedicinesFromDB,
+  getAllOrdersFromDB,
 };
