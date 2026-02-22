@@ -8,5 +8,6 @@ router.use(auth("ADMIN"));
 
 router.get("/users", AdminController.getAllUsers);
 router.patch("/users/:id", AdminController.updateUserStatus);
+router.get("/medicines", AdminController.getAllMedicines);
 
 export const AdminRoutes = router;

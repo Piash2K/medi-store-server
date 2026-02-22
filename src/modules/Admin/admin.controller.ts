@@ -56,7 +56,33 @@ const updateUserStatus = async (req: Request, res: Response) => {
   }
 };
 
+const getAllMedicines = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+      return;
+    }
+
+    const result = await AdminService.getAllMedicinesFromDB(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: "Medicines fetched successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const AdminController = {
   getAllUsers,
   updateUserStatus,
+  getAllMedicines,
 };
