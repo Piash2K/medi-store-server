@@ -17,6 +17,32 @@ const getAllCategories = async (req: Request, res: Response) => {
   }
 };
 
+const createCategory = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+      return;
+    }
+
+    const result = await CategoryService.createCategoryIntoDB(req.body);
+
+    res.status(201).json({
+      success: true,
+      message: "Category created successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const CategoryController = {
   getAllCategories,
+  createCategory,
 };

@@ -1,8 +1,13 @@
 import express from "express";
 import { CategoryController } from "./category.controller";
+import { auth } from "../../middlewares/auth";
 
 const router = express.Router();
 
+// Public routes
 router.get("/", CategoryController.getAllCategories);
+
+// Admin routes
+router.post("/", auth("ADMIN"), CategoryController.createCategory);
 
 export const CategoryRoutes = router;
