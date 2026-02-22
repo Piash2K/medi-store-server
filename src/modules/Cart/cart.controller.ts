@@ -137,9 +137,35 @@ const removeFromCart = async (req: Request, res: Response) => {
   }
 };
 
+const clearCart = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+      return;
+    }
+
+    const result = await CartService.clearCartIntoDB(req.user.id);
+
+    res.status(200).json({
+      success: true,
+      message: "Cart cleared successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const CartController = {
   getCart,
   addToCart,
   updateCartItem,
   removeFromCart,
+  clearCart,
 };

@@ -186,9 +186,20 @@ const removeFromCartIntoDB = async (payload: RemoveFromCartPayload) => {
   };
 };
 
+const clearCartIntoDB = async (userId: string) => {
+  if (!cartStore.has(userId)) {
+    return { message: "Cart is already empty" };
+  }
+
+  cartStore.delete(userId);
+
+  return { message: "Cart cleared successfully" };
+};
+
 export const CartService = {
   getCartForUser,
   addToCartIntoDB,
   updateCartItemIntoDB,
   removeFromCartIntoDB,
+  clearCartIntoDB,
 };
