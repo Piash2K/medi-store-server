@@ -91,8 +91,44 @@ const updateCategoryIntoDB = async (payload: UpdateCategoryPayload) => {
   return updatedCategory;
 };
 
+const deleteCategoryIntoDB = async (id: string) => {
+  // Check if category exists
+  const category = await prisma.category.findUnique({
+    where: {
+      id,
+    },
+    include: {
+      medicines: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  if (!category) {
+    throw new Error("Category not found");
+  }
+
+  // Check if category has medicines
+  if (category.medicines.length > 0) {
+    throw new Error(
+      `Cannot delete category with ${category.medicines.length} medicine(s). Please reassign medicines first.`
+    );
+  }
+
+  const deletedCategory = await prisma.category.delete({
+    where: {
+      id,
+    },
+  });
+
+  return deletedCategory;
+};
+
 export const CategoryService = {
   getAllCategoriesFromDB,
   createCategoryIntoDB,
   updateCategoryIntoDB,
+  deleteCategoryIntoDB,
 };
