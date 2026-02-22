@@ -6,6 +6,12 @@ type AddToCartPayload = {
   quantity: number;
 };
 
+type UpdateCartItemPayload = {
+  userId: string;
+  medicineId: string;
+  quantity: number;
+};
+
 // In-memory cart storage: userId -> {medicineId -> quantity}
 const cartStore = new Map<string, Map<string, number>>();
 
@@ -109,7 +115,56 @@ const addToCartIntoDB = async (payload: AddToCartPayload) => {
   };
 };
 
+const updateCartItemIntoDB = async (payload: UpdateCartItemPayload) => {
+  // Validate medicine exists
+  const medicine = await prisma.medicine.findUnique({
+    where: {
+      id: payload.medicineId,
+    },
+    select: {
+      stock: true,
+      isDeleted: true,
+    },
+  });
+
+  if (!medicine) {
+    throw new Error("Medicine not found");
+  }
+
+  if (medicine.isDeleted) {
+    throw new Error("Cannot update deleted medicine in cart");
+  }
+
+  if (payload.quantity <= 0) {
+    throw new Error("Quantity must be greater than 0");
+  }
+
+  if (payload.quantity > medicine.stock) {
+    throw new Error(
+      `Insufficient stock. Available: ${medicine.stock}, Requested: ${payload.quantity}`
+    );
+  }
+
+  if (!cartStore.has(payload.userId)) {
+    throw new Error("Cart is empty");
+  }
+
+  const userCart = cartStore.get(payload.userId)!;
+  if (!userCart.has(payload.medicineId)) {
+    throw new Error("Medicine not in cart");
+  }
+
+  userCart.set(payload.medicineId, payload.quantity);
+
+  return {
+    message: "Cart item updated",
+    medicineId: payload.medicineId,
+    quantity: payload.quantity,
+  };
+};
+
 export const CartService = {
   getCartForUser,
   addToCartIntoDB,
+  updateCartItemIntoDB,
 };
