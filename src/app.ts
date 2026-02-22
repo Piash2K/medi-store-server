@@ -8,6 +8,7 @@ import { SellerRoutes } from './modules/Seller/seller.route';
 import { OrderRoutes } from './modules/Order/order.route';
 import { AdminRoutes } from './modules/Admin/admin.route';
 import { UserRoutes } from './modules/User/user.route';
+import { ReviewRoutes } from './modules/Review/review.route';
 
 const app: Application = express();
 
@@ -26,6 +27,7 @@ app.use('/api/seller', SellerRoutes);
 app.use('/api/orders', OrderRoutes);
 app.use('/api/admin', AdminRoutes);
 app.use('/api/user', UserRoutes);
+app.use('/api/reviews', ReviewRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello from Medi Store API!');
