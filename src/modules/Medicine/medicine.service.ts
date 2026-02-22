@@ -13,10 +13,7 @@ const getAllMedicinesFromDB = async (query: Record<string, unknown>) => {
     sortOrder = "desc",
   } = query;
 
-  const whereConditions: Record<string, unknown>[] = [
-    { stock: { gt: 0 } },
-    { isDeleted: false },
-  ];
+  const whereConditions: Record<string, unknown>[] = [{ isDeleted: false }];
 
   if (searchTerm && typeof searchTerm === "string") {
     whereConditions.push({

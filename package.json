@@ -9,7 +9,9 @@
     "build": "tsc",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "seed:admin": "ts-node-dev --transpile-only src/scripts/seed-admin.ts",
+    "seed": "npm run seed:admin"
   },
   "keywords": [
     "express",
