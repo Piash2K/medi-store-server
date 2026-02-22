@@ -4,7 +4,8 @@ import { auth } from "../../middlewares/auth";
 
 const router = express.Router();
 
-// Add to cart - customer only
+// Cart routes - customer only
+router.get("/", auth("CUSTOMER"), CartController.getCart);
 router.post("/:id", auth("CUSTOMER"), CartController.addToCart);
 
 export const CartRoutes = router;

@@ -9,6 +9,49 @@ type AddToCartPayload = {
 // In-memory cart storage: userId -> {medicineId -> quantity}
 const cartStore = new Map<string, Map<string, number>>();
 
+const getCartForUser = async (userId: string) => {
+  if (!cartStore.has(userId)) {
+    return [];
+  }
+
+  const userCart = cartStore.get(userId)!;
+  const medicineIds = Array.from(userCart.keys());
+
+  if (medicineIds.length === 0) {
+    return [];
+  }
+
+  // Fetch medicine details
+  const medicines = await prisma.medicine.findMany({
+    where: {
+      id: {
+        in: medicineIds,
+      },
+      isDeleted: false,
+    },
+    include: {
+      category: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      seller: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  // Combine with quantities
+  return medicines.map((medicine) => ({
+    ...medicine,
+    cartQuantity: userCart.get(medicine.id) || 0,
+  }));
+};
+
 const addToCartIntoDB = async (payload: AddToCartPayload) => {
   // Validate medicine exists and is not deleted
   const medicine = await prisma.medicine.findUnique({
@@ -67,5 +110,6 @@ const addToCartIntoDB = async (payload: AddToCartPayload) => {
 };
 
 export const CartService = {
+  getCartForUser,
   addToCartIntoDB,
 };
