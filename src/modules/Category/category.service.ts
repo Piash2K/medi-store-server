@@ -5,6 +5,12 @@ type CreateCategoryPayload = {
   description?: string;
 };
 
+type UpdateCategoryPayload = {
+  id: string;
+  name?: string;
+  description?: string;
+};
+
 const getAllCategoriesFromDB = async () => {
   const categories = await prisma.category.findMany({
     orderBy: {
@@ -41,7 +47,52 @@ const createCategoryIntoDB = async (payload: CreateCategoryPayload) => {
   return category;
 };
 
+const updateCategoryIntoDB = async (payload: UpdateCategoryPayload) => {
+  // Check if category exists
+  const category = await prisma.category.findUnique({
+    where: {
+      id: payload.id,
+    },
+  });
+
+  if (!category) {
+    throw new Error("Category not found");
+  }
+
+  // If name is being updated, check for duplicates
+  if (payload.name && payload.name !== category.name) {
+    const existingCategory = await prisma.category.findUnique({
+      where: {
+        name: payload.name,
+      },
+    });
+
+    if (existingCategory) {
+      throw new Error(`Category "${payload.name}" already exists`);
+    }
+  }
+
+  // Validate name if it's being updated
+  if (payload.name && !payload.name.trim()) {
+    throw new Error("Category name cannot be empty");
+  }
+
+  const updateData: any = {};
+  if (payload.name !== undefined) updateData.name = payload.name.trim();
+  if (payload.description !== undefined) updateData.description = payload.description?.trim();
+
+  const updatedCategory = await prisma.category.update({
+    where: {
+      id: payload.id,
+    },
+    data: updateData,
+  });
+
+  return updatedCategory;
+};
+
 export const CategoryService = {
   getAllCategoriesFromDB,
   createCategoryIntoDB,
+  updateCategoryIntoDB,
 };
