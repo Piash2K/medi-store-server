@@ -12,6 +12,11 @@ type UpdateCartItemPayload = {
   quantity: number;
 };
 
+type RemoveFromCartPayload = {
+  userId: string;
+  medicineId: string;
+};
+
 // In-memory cart storage: userId -> {medicineId -> quantity}
 const cartStore = new Map<string, Map<string, number>>();
 
@@ -163,8 +168,27 @@ const updateCartItemIntoDB = async (payload: UpdateCartItemPayload) => {
   };
 };
 
+const removeFromCartIntoDB = async (payload: RemoveFromCartPayload) => {
+  if (!cartStore.has(payload.userId)) {
+    throw new Error("Cart is empty");
+  }
+
+  const userCart = cartStore.get(payload.userId)!;
+  if (!userCart.has(payload.medicineId)) {
+    throw new Error("Medicine not in cart");
+  }
+
+  userCart.delete(payload.medicineId);
+
+  return {
+    message: "Medicine removed from cart",
+    medicineId: payload.medicineId,
+  };
+};
+
 export const CartService = {
   getCartForUser,
   addToCartIntoDB,
   updateCartItemIntoDB,
+  removeFromCartIntoDB,
 };
