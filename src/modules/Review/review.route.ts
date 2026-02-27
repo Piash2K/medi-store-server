@@ -4,6 +4,8 @@ import { auth } from "../../middlewares/auth";
 
 const router = express.Router();
 
+router.get("/:id", ReviewController.getReviewsByMedicine);
+
 // Customer routes
 router.post("/:id", auth("CUSTOMER"), ReviewController.createReview);
 

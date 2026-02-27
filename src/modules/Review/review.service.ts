@@ -7,6 +7,55 @@ type CreateReviewPayload = {
   comment?: string;
 };
 
+const getReviewsByMedicineFromDB = async (medicineId: string) => {
+  const medicine = await prisma.medicine.findUnique({
+    where: {
+      id: medicineId,
+    },
+    select: {
+      id: true,
+      isDeleted: true,
+    },
+  });
+
+  if (!medicine || medicine.isDeleted) {
+    throw new Error("Medicine not found");
+  }
+
+  const reviews = await prisma.review.findMany({
+    where: {
+      medicineId,
+    },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  const totalReviews = reviews.length;
+  const averageRating =
+    totalReviews > 0
+      ? Number(
+          (
+            reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
+          ).toFixed(1)
+        )
+      : 0;
+
+  return {
+    totalReviews,
+    averageRating,
+    reviews,
+  };
+};
+
 const createReviewIntoDB = async (payload: CreateReviewPayload) => {
   // Validate rating
   if (!payload.rating || payload.rating < 1 || payload.rating > 5) {
@@ -115,4 +164,5 @@ const createReviewIntoDB = async (payload: CreateReviewPayload) => {
 
 export const ReviewService = {
   createReviewIntoDB,
+  getReviewsByMedicineFromDB,
 };
