@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { OrderStatus } from "../../../generated/prisma/enums";
 
 type OrderItem = {
   medicineId: string;
@@ -316,9 +317,46 @@ const cancelOrderIntoDB = async (orderId: string, customerId: string) => {
   return result;
 };
 
+// Allowed status transitions
+const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PLACED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+  [OrderStatus.DELIVERED]: [],
+  [OrderStatus.CANCELLED]: [],
+};
+
+const updateOrderStatus = async (orderId: string, newStatus: OrderStatus, actorRole: string) => {
+  // Fetch current order
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new Error("Order not found");
+
+  // Prevent status change if already DELIVERED or CANCELLED
+  const currentStatus = order.status as OrderStatus;
+  if (currentStatus === OrderStatus.DELIVERED || currentStatus === OrderStatus.CANCELLED) {
+    throw new Error(`Cannot change status of a ${order.status} order`);
+  }
+
+  // Check allowed transitions
+  const allowed = allowedTransitions[currentStatus] || [];
+  if (!allowed.includes(newStatus as OrderStatus)) {
+    throw new Error(`Invalid status transition: ${order.status} → ${newStatus}`);
+  }
+
+  // Optionally, add role-based checks here (e.g., only seller can mark as SHIPPED/DELIVERED)
+
+  // Update status
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: { status: newStatus },
+  });
+  return updatedOrder;
+};
+
 export const OrderService = {
   createOrderIntoDB,
   getUserOrdersFromDB,
   getSingleOrderFromDB,
   cancelOrderIntoDB,
+  updateOrderStatus,
 };
