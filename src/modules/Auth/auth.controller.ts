@@ -9,7 +9,12 @@ const createUser = async (req: Request, res: Response) => {
       message: "User created successfully",
       data: result,
     });
-  } catch (error) {}
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
 };
 const loginUser = async (req: Request, res: Response) => {
   try {

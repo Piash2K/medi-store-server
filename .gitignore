@@ -4,3 +4,4 @@ dist
 generated
 coverage
 .DS_Store
+.vercel

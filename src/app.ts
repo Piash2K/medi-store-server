@@ -17,7 +17,10 @@ const app: Application = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
+      "https://medi-store-client-wheat.vercel.app",
+    ],
     credentials: true,
   })
 );
