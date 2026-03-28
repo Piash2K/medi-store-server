@@ -1,6 +1,13 @@
 import { Request, Response } from "express";
 import { OrderService } from "./order.service";
 
+const getCallbackPayload = (req: Request) => {
+  return {
+    ...(typeof req.query === "object" ? req.query : {}),
+    ...(typeof req.body === "object" ? req.body : {}),
+  };
+};
+
 const createOrder = async (req: Request, res: Response) => {
   try {
     if (!req.user) {
@@ -19,6 +26,122 @@ const createOrder = async (req: Request, res: Response) => {
     res.status(201).json({
       success: true,
       message: "Order created successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+const createSslCommerzSession = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+      return;
+    }
+
+    const result = await OrderService.createSslCommerzSessionIntoDB({
+      ...req.body,
+      customerId: req.user.id,
+      paymentMethod: "SSLCOMMERZ",
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "SSLCommerz session initialized successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+const sslCommerzSuccess = async (req: Request, res: Response) => {
+  try {
+    const callbackPayload = getCallbackPayload(req);
+    const result = await OrderService.handleSslCommerzSuccess(callbackPayload);
+
+    if (result.redirectUrl) {
+      res.redirect(result.redirectUrl);
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment validated successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+const sslCommerzFail = async (req: Request, res: Response) => {
+  try {
+    const callbackPayload = getCallbackPayload(req);
+    const result = await OrderService.handleSslCommerzFail(callbackPayload);
+
+    if (result.redirectUrl) {
+      res.redirect(result.redirectUrl);
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment marked as failed",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+const sslCommerzCancel = async (req: Request, res: Response) => {
+  try {
+    const callbackPayload = getCallbackPayload(req);
+    const result = await OrderService.handleSslCommerzCancel(callbackPayload);
+
+    if (result.redirectUrl) {
+      res.redirect(result.redirectUrl);
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment marked as cancelled",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
+const sslCommerzIpn = async (req: Request, res: Response) => {
+  try {
+    const callbackPayload = getCallbackPayload(req);
+    const result = await OrderService.handleSslCommerzIpn(callbackPayload);
+
+    res.status(200).json({
+      success: true,
+      message: "IPN processed",
       data: result,
     });
   } catch (error) {
@@ -108,6 +231,11 @@ const cancelOrder = async (req: Request, res: Response) => {
 
 export const OrderController = {
   createOrder,
+  createSslCommerzSession,
+  sslCommerzSuccess,
+  sslCommerzFail,
+  sslCommerzCancel,
+  sslCommerzIpn,
   getUserOrders,
   getSingleOrder,
   cancelOrder,

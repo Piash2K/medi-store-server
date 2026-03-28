@@ -15,6 +15,7 @@ const app: Application = express();
 
 // parsers
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: [

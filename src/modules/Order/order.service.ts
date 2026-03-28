@@ -1,4 +1,6 @@
 import { prisma } from "../../lib/prisma";
+import config from "../../config";
+import type { Prisma } from "../../../generated/prisma/client";
 import { OrderStatus } from "../../../generated/prisma/enums";
 
 type OrderItem = {
@@ -10,15 +12,59 @@ type CreateOrderPayload = {
   customerId: string;
   shippingAddress: string;
   items: OrderItem[];
+  paymentMethod?: "COD" | "SSLCOMMERZ";
 };
 
-const createOrderIntoDB = async (payload: CreateOrderPayload) => {
+type SslSessionInitResponse = {
+  status?: string;
+  failedreason?: string;
+  GatewayPageURL?: string;
+  [key: string]: unknown;
+};
+
+type SslCallbackPayload = {
+  tran_id?: string;
+  val_id?: string;
+  status?: string;
+  amount?: string;
+  [key: string]: unknown;
+};
+
+const toInputJson = (value: unknown): Prisma.InputJsonValue => {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+};
+
+const ensureSslConfig = () => {
+  const missing: string[] = [];
+
+  if (!config.sslcommerz.store_id) missing.push("SSLCOMMERZ_STORE_ID");
+  if (!config.sslcommerz.store_password) missing.push("SSLCOMMERZ_STORE_PASSWORD");
+  if (!config.sslcommerz.session_api_url) missing.push("SSLCOMMERZ_SESSION_API_URL");
+  if (!config.sslcommerz.validation_api_url) missing.push("SSLCOMMERZ_VALIDATION_API_URL");
+  if (!config.app_base_url) missing.push("APP_BASE_URL");
+
+  if (missing.length > 0) {
+    throw new Error(`Missing SSLCommerz configuration: ${missing.join(", ")}`);
+  }
+};
+
+const normalizePaymentMethod = (method?: string): "COD" | "SSLCOMMERZ" => {
+  if (!method) return "COD";
+  if (method === "COD" || method === "SSLCOMMERZ") return method;
+  throw new Error("Invalid payment method. Supported values: COD, SSLCOMMERZ");
+};
+
+const getCustomerForOrder = async (customerId: string) => {
   const customer = await prisma.user.findUnique({
     where: {
-      id: payload.customerId,
+      id: customerId,
     },
     select: {
       id: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
       role: true,
       status: true,
     },
@@ -36,12 +82,12 @@ const createOrderIntoDB = async (payload: CreateOrderPayload) => {
     throw new Error("Customer account is banned");
   }
 
+  return customer;
+};
+
+const prepareOrderItems = async (payload: Pick<CreateOrderPayload, "items">) => {
   if (!payload.items || payload.items.length === 0) {
     throw new Error("Order must contain at least one item");
-  }
-
-  if (!payload.shippingAddress || !payload.shippingAddress.trim()) {
-    throw new Error("Shipping address is required");
   }
 
   const medicineIds = payload.items.map((item) => item.medicineId);
@@ -96,16 +142,35 @@ const createOrderIntoDB = async (payload: CreateOrderPayload) => {
     });
   }
 
+  return { totalAmount, orderItems };
+};
+
+const createOrderWithStockDeduction = async (args: {
+  customerId: string;
+  shippingAddress: string;
+  totalAmount: number;
+  orderItems: Array<{
+    medicineId: string;
+    quantity: number;
+    price: number;
+  }>;
+  paymentMethod: "COD" | "SSLCOMMERZ";
+  paymentStatus: "COD" | "PENDING";
+  transactionId?: string;
+}) => {
   const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.create({
       data: {
-        customerId: payload.customerId,
-        shippingAddress: payload.shippingAddress,
-        totalAmount,
+        customerId: args.customerId,
+        shippingAddress: args.shippingAddress,
+        totalAmount: args.totalAmount,
         status: "PLACED",
-        paymentMethod: "COD",
+        paymentMethod: args.paymentMethod,
+        paymentStatus: args.paymentStatus,
+        paymentGateway: args.paymentMethod === "SSLCOMMERZ" ? "SSLCOMMERZ" : null,
+        transactionId: args.transactionId,
         items: {
-          create: orderItems,
+          create: args.orderItems,
         },
       },
       include: {
@@ -130,7 +195,7 @@ const createOrderIntoDB = async (payload: CreateOrderPayload) => {
       },
     });
 
-    for (const item of orderItems) {
+    for (const item of args.orderItems) {
       await tx.medicine.update({
         where: {
           id: item.medicineId,
@@ -147,6 +212,317 @@ const createOrderIntoDB = async (payload: CreateOrderPayload) => {
   });
 
   return result;
+};
+
+const createOrderIntoDB = async (payload: CreateOrderPayload) => {
+  const paymentMethod = normalizePaymentMethod(payload.paymentMethod);
+
+  await getCustomerForOrder(payload.customerId);
+
+  if (!payload.shippingAddress || !payload.shippingAddress.trim()) {
+    throw new Error("Shipping address is required");
+  }
+
+  const { totalAmount, orderItems } = await prepareOrderItems(payload);
+
+  if (paymentMethod === "SSLCOMMERZ") {
+    throw new Error("Use /api/orders/sslcommerz/init for SSLCOMMERZ payments");
+  }
+
+  return createOrderWithStockDeduction({
+    customerId: payload.customerId,
+    shippingAddress: payload.shippingAddress,
+    totalAmount,
+    orderItems,
+    paymentMethod: "COD",
+    paymentStatus: "COD",
+  });
+};
+
+const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload) => {
+  ensureSslConfig();
+
+  const customer = await getCustomerForOrder(payload.customerId);
+
+  if (!payload.shippingAddress || !payload.shippingAddress.trim()) {
+    throw new Error("Shipping address is required");
+  }
+
+  const { totalAmount, orderItems } = await prepareOrderItems(payload);
+  const transactionId = `ssl_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+
+  const order = await createOrderWithStockDeduction({
+    customerId: payload.customerId,
+    shippingAddress: payload.shippingAddress,
+    totalAmount,
+    orderItems,
+    paymentMethod: "SSLCOMMERZ",
+    paymentStatus: "PENDING",
+    transactionId,
+  });
+
+  try {
+    const sessionPayload = new URLSearchParams({
+      store_id: config.sslcommerz.store_id as string,
+      store_passwd: config.sslcommerz.store_password as string,
+      total_amount: totalAmount.toFixed(2),
+      currency: "BDT",
+      tran_id: transactionId,
+      success_url: `${config.app_base_url}/api/orders/sslcommerz/success`,
+      fail_url: `${config.app_base_url}/api/orders/sslcommerz/fail`,
+      cancel_url: `${config.app_base_url}/api/orders/sslcommerz/cancel`,
+      ipn_url: `${config.app_base_url}/api/orders/sslcommerz/ipn`,
+      shipping_method: "Courier",
+      product_name: `Medicine Order ${order.id}`,
+      product_category: "Medicine",
+      product_profile: "general",
+      cus_name: customer.name,
+      cus_email: customer.email,
+      cus_add1: payload.shippingAddress,
+      cus_city: "Dhaka",
+      cus_state: "Dhaka",
+      cus_postcode: "1207",
+      cus_country: "Bangladesh",
+      cus_phone: customer.phone || "01700000000",
+      ship_name: customer.name,
+      ship_add1: payload.shippingAddress,
+      ship_city: "Dhaka",
+      ship_state: "Dhaka",
+      ship_postcode: "1207",
+      ship_country: "Bangladesh",
+      value_a: order.id,
+      value_b: payload.customerId,
+    });
+
+    const response = await fetch(config.sslcommerz.session_api_url as string, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: sessionPayload.toString(),
+    });
+
+    const data = (await response.json()) as SslSessionInitResponse;
+
+    if (!response.ok) {
+      throw new Error(`SSLCommerz session API failed: ${response.status}`);
+    }
+
+    if (data.status !== "SUCCESS" || !data.GatewayPageURL) {
+      throw new Error(data.failedreason || "Unable to initialize SSLCommerz session");
+    }
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        paymentGatewayData: toInputJson({
+          initResponse: data,
+        }),
+      },
+    });
+
+    return {
+      orderId: order.id,
+      transactionId,
+      gatewayPageURL: data.GatewayPageURL,
+      sslcommerz: data,
+    };
+  } catch (error) {
+    await markPaymentFailedAndRestoreStock(transactionId, "FAILED", {
+      error: (error as Error).message,
+      source: "session-init",
+    });
+    throw error;
+  }
+};
+
+const markPaymentFailedAndRestoreStock = async (
+  transactionId: string,
+  paymentStatus: "FAILED" | "CANCELLED",
+  callbackPayload?: Record<string, unknown>
+) => {
+  const order = await prisma.order.findFirst({
+    where: { transactionId },
+    include: {
+      items: true,
+    },
+  });
+
+  if (!order) {
+    throw new Error("Order not found for this transaction");
+  }
+
+  if (order.paymentStatus === "PAID") {
+    return order;
+  }
+
+  if (order.paymentStatus === paymentStatus) {
+    return order;
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: {
+        paymentStatus,
+        status: "CANCELLED",
+        paymentGatewayData: toInputJson({
+          callbackPayload: callbackPayload || null,
+          previousStatus: order.paymentStatus,
+        }),
+      },
+    });
+
+    for (const item of order.items) {
+      await tx.medicine.update({
+        where: {
+          id: item.medicineId,
+        },
+        data: {
+          stock: {
+            increment: item.quantity,
+          },
+        },
+      });
+    }
+
+    return updated;
+  });
+};
+
+const buildClientRedirectUrl = (isSuccess: boolean, transactionId: string, orderId?: string) => {
+  const baseUrl = isSuccess ? config.client_success_url : config.client_failed_url;
+  if (!baseUrl) return null;
+
+  const redirectUrl = new URL(baseUrl);
+  redirectUrl.searchParams.set("tran_id", transactionId);
+  if (orderId) {
+    redirectUrl.searchParams.set("order_id", orderId);
+  }
+  return redirectUrl.toString();
+};
+
+const handleSslCommerzSuccess = async (callbackPayload: SslCallbackPayload) => {
+  ensureSslConfig();
+
+  const transactionId = callbackPayload.tran_id;
+  const valId = callbackPayload.val_id;
+
+  if (!transactionId) {
+    throw new Error("tran_id is required in SSLCommerz success callback");
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { transactionId },
+  });
+
+  if (!order) {
+    throw new Error("Order not found for transaction");
+  }
+
+  if (order.paymentStatus === "PAID") {
+    return {
+      order,
+      redirectUrl: buildClientRedirectUrl(true, transactionId, order.id),
+      alreadyPaid: true,
+    };
+  }
+
+  if (!valId) {
+    throw new Error("val_id is required to validate SSLCommerz transaction");
+  }
+
+  const validatorParams = new URLSearchParams({
+    val_id: valId,
+    store_id: config.sslcommerz.store_id as string,
+    store_passwd: config.sslcommerz.store_password as string,
+    format: "json",
+  });
+
+  const validateResponse = await fetch(
+    `${config.sslcommerz.validation_api_url}?${validatorParams.toString()}`,
+    { method: "GET" }
+  );
+  const validation = (await validateResponse.json()) as Record<string, unknown>;
+
+  const validatedStatus = String(validation.status || "");
+  const validatedTranId = String(validation.tran_id || "");
+  const validatedAmount = Number(validation.amount || 0);
+
+  const isValidStatus = validatedStatus === "VALID" || validatedStatus === "VALIDATED";
+  const amountMatches = Math.abs(validatedAmount - order.totalAmount) < 0.01;
+  const tranMatches = validatedTranId === transactionId;
+
+  if (!validateResponse.ok || !isValidStatus || !amountMatches || !tranMatches) {
+    await markPaymentFailedAndRestoreStock(transactionId, "FAILED", {
+      callbackPayload,
+      validation,
+    });
+    throw new Error("SSLCommerz validation failed");
+  }
+
+  const updatedOrder = await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      paymentStatus: "PAID",
+      paymentGatewayData: toInputJson({
+        callbackPayload,
+        validation,
+      }),
+    },
+  });
+
+  return {
+    order: updatedOrder,
+    redirectUrl: buildClientRedirectUrl(true, transactionId, updatedOrder.id),
+    alreadyPaid: false,
+  };
+};
+
+const handleSslCommerzFail = async (callbackPayload: SslCallbackPayload) => {
+  const transactionId = callbackPayload.tran_id;
+  if (!transactionId) {
+    throw new Error("tran_id is required in SSLCommerz fail callback");
+  }
+
+  const order = await markPaymentFailedAndRestoreStock(transactionId, "FAILED", callbackPayload);
+  return {
+    order,
+    redirectUrl: buildClientRedirectUrl(false, transactionId, order.id),
+  };
+};
+
+const handleSslCommerzCancel = async (callbackPayload: SslCallbackPayload) => {
+  const transactionId = callbackPayload.tran_id;
+  if (!transactionId) {
+    throw new Error("tran_id is required in SSLCommerz cancel callback");
+  }
+
+  const order = await markPaymentFailedAndRestoreStock(transactionId, "CANCELLED", callbackPayload);
+  return {
+    order,
+    redirectUrl: buildClientRedirectUrl(false, transactionId, order.id),
+  };
+};
+
+const handleSslCommerzIpn = async (callbackPayload: SslCallbackPayload) => {
+  const status = String(callbackPayload.status || "").toUpperCase();
+
+  if (status === "VALID" || status === "VALIDATED") {
+    return handleSslCommerzSuccess(callbackPayload);
+  }
+
+  if (status === "FAILED") {
+    return handleSslCommerzFail(callbackPayload);
+  }
+
+  if (status === "CANCELLED") {
+    return handleSslCommerzCancel(callbackPayload);
+  }
+
+  return {
+    message: `IPN ignored for status: ${status || "UNKNOWN"}`,
+  };
 };
 
 const getUserOrdersFromDB = async (customerId: string) => {
@@ -355,6 +731,11 @@ const updateOrderStatus = async (orderId: string, newStatus: OrderStatus, actorR
 
 export const OrderService = {
   createOrderIntoDB,
+  createSslCommerzSessionIntoDB,
+  handleSslCommerzSuccess,
+  handleSslCommerzFail,
+  handleSslCommerzCancel,
+  handleSslCommerzIpn,
   getUserOrdersFromDB,
   getSingleOrderFromDB,
   cancelOrderIntoDB,

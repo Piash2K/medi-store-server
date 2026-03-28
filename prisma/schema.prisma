@@ -28,6 +28,15 @@ enum OrderStatus {
 
 enum PaymentMethod {
   COD
+  SSLCOMMERZ
+}
+
+enum PaymentStatus {
+  COD
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
 }
 
 model User {
@@ -95,6 +104,10 @@ model Order {
   customerId      String
   status          OrderStatus @default(PLACED)
   paymentMethod   PaymentMethod @default(COD)
+  paymentStatus   PaymentStatus @default(COD)
+  transactionId   String? @unique
+  paymentGateway  String?
+  paymentGatewayData Json?
   shippingAddress String
   totalAmount     Float
   createdAt       DateTime @default(now())
