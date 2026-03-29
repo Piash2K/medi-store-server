@@ -15,6 +15,16 @@ export const CreateOrderPayloadSchema = z.object({
 export type CreateOrderPayload = z.infer<typeof CreateOrderPayloadSchema>;
 export type OrderItem = z.infer<typeof OrderItemSchema>;
 
+// Refund payload validation
+export const RefundPayloadSchema = z.object({
+  orderId: z.string().uuid('Invalid order ID format'),
+  reason: z.string().min(5, 'Refund reason must be at least 5 characters'),
+  refundAmount: z.number().positive('Refund amount must be greater than 0').optional(),
+  notes: z.string().optional(),
+});
+
+export type RefundPayload = z.infer<typeof RefundPayloadSchema>;
+
 // SSLCommerz callback payloads validation
 export const SslSuccessCallbackSchema = z.object({
   tran_id: z.string().min(1, 'Transaction ID is required'),
@@ -68,6 +78,10 @@ export type SslSessionInitResponse = z.infer<typeof SslSessionInitResponseSchema
 // Helper function to safely parse and validate callback payloads
 export const parseOrderPayload = (data: unknown) => {
   return CreateOrderPayloadSchema.safeParse(data);
+};
+
+export const parseRefundPayload = (data: unknown) => {
+  return RefundPayloadSchema.safeParse(data);
 };
 
 export const parseSslSuccessCallback = (data: unknown) => {

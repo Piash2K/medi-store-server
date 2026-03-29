@@ -1,5 +1,6 @@
 import express from "express";
 import { OrderController } from "./order.controller";
+import { RefundController } from "./refund.controller";
 import { auth } from "../../middlewares/auth";
 
 const router = express.Router();
@@ -19,5 +20,7 @@ router.post("/sslcommerz/init", OrderController.createSslCommerzSession);
 router.get("/", OrderController.getUserOrders);
 router.get("/:id", OrderController.getSingleOrder);
 router.patch("/:id", OrderController.cancelOrder);
+router.post("/:id/refund", RefundController.requestRefund);
+router.get("/:orderId/refund-status", RefundController.getRefundStatus);
 
 export const OrderRoutes = router;

@@ -221,6 +221,108 @@ class PaymentTransactionLogger {
 
     logger.info('Medicine stock restored', logEntry);
   }
+
+  /**
+   * Log refund initiation
+   */
+  public logRefundInitiated(data: {
+    orderId: string;
+    customerId: string;
+    refundAmount: number;
+    reason: string;
+    initiatedBy: string;
+  }): void {
+    const logEntry = {
+      orderId: data.orderId,
+      customerId: data.customerId,
+      amount: data.refundAmount,
+      event: 'REFUND_INITIATED',
+      status: 'INITIATED',
+      timestamp: new Date().toISOString(),
+      details: {
+        reason: data.reason,
+        initiated_by: data.initiatedBy,
+      },
+    };
+
+    logger.info('Refund initiated', logEntry);
+  }
+
+  /**
+   * Log successful refund
+   */
+  public logRefundProcessed(data: {
+    orderId: string;
+    customerId: string;
+    refundAmount: number;
+    reason: string;
+    originalTransactionId?: string;
+  }): void {
+    const logEntry = {
+      orderId: data.orderId,
+      customerId: data.customerId,
+      amount: data.refundAmount,
+      event: 'REFUND_PROCESSED',
+      status: 'COMPLETED',
+      timestamp: new Date().toISOString(),
+      details: {
+        reason: data.reason,
+        original_transaction_id: data.originalTransactionId,
+      },
+    };
+
+    logger.info('Refund processed successfully', logEntry);
+  }
+
+  /**
+   * Log refund failure
+   */
+  public logRefundFailed(data: {
+    orderId: string;
+    customerId: string;
+    refundAmount: number;
+    reason: string;
+    error: string;
+  }): void {
+    const logEntry = {
+      orderId: data.orderId,
+      customerId: data.customerId,
+      amount: data.refundAmount,
+      event: 'REFUND_FAILED',
+      status: 'FAILED',
+      timestamp: new Date().toISOString(),
+      details: {
+        reason: data.reason,
+        error: data.error,
+      },
+    };
+
+    logger.error('Refund failed', logEntry);
+  }
+
+  /**
+   * Log refund validation error
+   */
+  public logRefundValidationError(data: {
+    orderId: string;
+    customerId: string;
+    error: string;
+    details?: unknown;
+  }): void {
+    const logEntry = {
+      orderId: data.orderId,
+      customerId: data.customerId,
+      event: 'REFUND_VALIDATION_ERROR',
+      status: 'ERROR',
+      timestamp: new Date().toISOString(),
+      details: {
+        error: data.error,
+        validation_details: data.details,
+      },
+    };
+
+    logger.warn('Refund validation error', logEntry);
+  }
 }
 
 export const paymentLogger = new PaymentTransactionLogger();
