@@ -10,6 +10,7 @@ export default {
   app_base_url: process.env.APP_BASE_URL,
   client_success_url: process.env.CLIENT_PAYMENT_SUCCESS_URL,
   client_failed_url: process.env.CLIENT_PAYMENT_FAILED_URL,
+  client_cancel_url: process.env.CLIENT_PAYMENT_CANCEL_URL,
   sslcommerz: {
     store_id: process.env.SSLCOMMERZ_STORE_ID,
     store_password: process.env.SSLCOMMERZ_STORE_PASSWORD,

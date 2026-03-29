@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { OrderService } from "./order.service";
+import config from "../../config";
+import { logger } from "../../lib/logger";
 import {
   parseOrderPayload,
   parseSslSuccessCallback,
@@ -7,6 +9,17 @@ import {
   parseSslCancelCallback,
   parseSslIpnCallback,
 } from "../../validations/order.validation";
+
+const buildFailedRedirectUrl = (tranId?: string) => {
+  const baseUrl = config.client_failed_url || config.client_cancel_url;
+  if (!baseUrl) return null;
+
+  const redirectUrl = new URL(baseUrl);
+  if (tranId) {
+    redirectUrl.searchParams.set("tran_id", tranId);
+  }
+  return redirectUrl.toString();
+};
 
 const getCallbackPayload = (req: Request) => {
   return {
@@ -97,10 +110,20 @@ const createSslCommerzSession = async (req: Request, res: Response) => {
 const sslCommerzSuccess = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
+    logger.info("SSLCommerz success callback received", {
+      method: req.method,
+      tran_id: callbackPayload.tran_id,
+    });
 
     // Validate callback payload
     const validationResult = parseSslSuccessCallback(callbackPayload);
     if (!validationResult.success) {
+      const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+      if (failedUrl) {
+        res.redirect(303, failedUrl);
+        return;
+      }
+
       res.status(400).json({
         success: false,
         message: "Invalid success callback payload",
@@ -112,7 +135,13 @@ const sslCommerzSuccess = async (req: Request, res: Response) => {
     const result = await OrderService.handleSslCommerzSuccess(validationResult.data);
 
     if (result.redirectUrl) {
-      res.redirect(result.redirectUrl);
+      res.redirect(303, result.redirectUrl);
+      return;
+    }
+
+    const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+    if (failedUrl) {
+      res.redirect(303, failedUrl);
       return;
     }
 
@@ -122,6 +151,13 @@ const sslCommerzSuccess = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
+    const callbackPayload = getCallbackPayload(req);
+    const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+    if (failedUrl) {
+      res.redirect(303, failedUrl);
+      return;
+    }
+
     res.status(400).json({
       success: false,
       message: (error as Error).message,
@@ -132,10 +168,20 @@ const sslCommerzSuccess = async (req: Request, res: Response) => {
 const sslCommerzFail = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
+    logger.info("SSLCommerz fail callback received", {
+      method: req.method,
+      tran_id: callbackPayload.tran_id,
+    });
 
     // Validate callback payload
     const validationResult = parseSslFailCallback(callbackPayload);
     if (!validationResult.success) {
+      const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+      if (failedUrl) {
+        res.redirect(303, failedUrl);
+        return;
+      }
+
       res.status(400).json({
         success: false,
         message: "Invalid fail callback payload",
@@ -147,7 +193,13 @@ const sslCommerzFail = async (req: Request, res: Response) => {
     const result = await OrderService.handleSslCommerzFail(validationResult.data);
 
     if (result.redirectUrl) {
-      res.redirect(result.redirectUrl);
+      res.redirect(303, result.redirectUrl);
+      return;
+    }
+
+    const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+    if (failedUrl) {
+      res.redirect(303, failedUrl);
       return;
     }
 
@@ -157,6 +209,13 @@ const sslCommerzFail = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
+    const callbackPayload = getCallbackPayload(req);
+    const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+    if (failedUrl) {
+      res.redirect(303, failedUrl);
+      return;
+    }
+
     res.status(400).json({
       success: false,
       message: (error as Error).message,
@@ -167,10 +226,20 @@ const sslCommerzFail = async (req: Request, res: Response) => {
 const sslCommerzCancel = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
+    logger.info("SSLCommerz cancel callback received", {
+      method: req.method,
+      tran_id: callbackPayload.tran_id,
+    });
 
     // Validate callback payload
     const validationResult = parseSslCancelCallback(callbackPayload);
     if (!validationResult.success) {
+      const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+      if (failedUrl) {
+        res.redirect(303, failedUrl);
+        return;
+      }
+
       res.status(400).json({
         success: false,
         message: "Invalid cancel callback payload",
@@ -182,7 +251,13 @@ const sslCommerzCancel = async (req: Request, res: Response) => {
     const result = await OrderService.handleSslCommerzCancel(validationResult.data);
 
     if (result.redirectUrl) {
-      res.redirect(result.redirectUrl);
+      res.redirect(303, result.redirectUrl);
+      return;
+    }
+
+    const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+    if (failedUrl) {
+      res.redirect(303, failedUrl);
       return;
     }
 
@@ -192,6 +267,13 @@ const sslCommerzCancel = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
+    const callbackPayload = getCallbackPayload(req);
+    const failedUrl = buildFailedRedirectUrl(String(callbackPayload.tran_id || ""));
+    if (failedUrl) {
+      res.redirect(303, failedUrl);
+      return;
+    }
+
     res.status(400).json({
       success: false,
       message: (error as Error).message,

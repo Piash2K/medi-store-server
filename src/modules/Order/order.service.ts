@@ -16,8 +16,70 @@ import type {
 
 type SslCallbackPayload = SslSuccessCallback | SslFailCallback | SslCancelCallback | SslIpnCallback;
 
+const SSL_INIT_TIMEOUT_MS = 30000;
+const SSL_INIT_MAX_TIMEOUT_RETRIES = 2;
+
 const toInputJson = (value: unknown): Prisma.InputJsonValue => {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isNetworkTimeoutError = (error: unknown) => {
+  if (!(error instanceof Error)) return false;
+
+  const maybeCause = error as Error & { cause?: { code?: string } };
+  const code = maybeCause.cause?.code;
+  const message = error.message.toLowerCase();
+
+  return (
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    message.includes("connect timeout") ||
+    message.includes("timed out") ||
+    error.name === "AbortError"
+  );
+};
+
+const initSslCommerzSessionWithRetry = async (
+  url: string,
+  payload: string,
+  orderId: string,
+  transactionId: string
+) => {
+  const maxAttempts = SSL_INIT_MAX_TIMEOUT_RETRIES + 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: payload,
+        signal: AbortSignal.timeout(SSL_INIT_TIMEOUT_MS),
+      });
+
+      return response;
+    } catch (error) {
+      const timeoutError = isNetworkTimeoutError(error);
+      const hasRemainingAttempt = attempt < maxAttempts;
+
+      if (!timeoutError || !hasRemainingAttempt) {
+        throw error;
+      }
+
+      const backoffMs = attempt * 500;
+      paymentLogger.logApiError({
+        orderId,
+        transactionId,
+        apiCall: "SSLCommerz Session Initialization",
+        error: `Network timeout on attempt ${attempt}/${maxAttempts}. Retrying in ${backoffMs}ms`,
+      });
+      await sleep(backoffMs);
+    }
+  }
+
+  throw new Error("SSLCommerz session initialization failed after retries");
 };
 
 const ensureSslConfig = () => {
@@ -28,6 +90,9 @@ const ensureSslConfig = () => {
   if (!config.sslcommerz.session_api_url) missing.push("SSLCOMMERZ_SESSION_API_URL");
   if (!config.sslcommerz.validation_api_url) missing.push("SSLCOMMERZ_VALIDATION_API_URL");
   if (!config.app_base_url) missing.push("APP_BASE_URL");
+  if (!config.client_success_url) missing.push("CLIENT_PAYMENT_SUCCESS_URL");
+  if (!config.client_failed_url) missing.push("CLIENT_PAYMENT_FAILED_URL");
+  if (!config.client_cancel_url) missing.push("CLIENT_PAYMENT_CANCEL_URL");
 
   if (missing.length > 0) {
     throw new Error(`Missing SSLCommerz configuration: ${missing.join(", ")}`);
@@ -258,15 +323,19 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
   });
 
   try {
+    const successUrl = `${config.app_base_url}/api/orders/sslcommerz/success`;
+    const failedUrl = `${config.app_base_url}/api/orders/sslcommerz/fail`;
+    const cancelUrl = `${config.app_base_url}/api/orders/sslcommerz/cancel`;
+
     const sessionPayload = new URLSearchParams({
       store_id: config.sslcommerz.store_id as string,
       store_passwd: config.sslcommerz.store_password as string,
       total_amount: totalAmount.toFixed(2),
       currency: "BDT",
       tran_id: transactionId,
-      success_url: `${config.app_base_url}/api/orders/sslcommerz/success`,
-      fail_url: `${config.app_base_url}/api/orders/sslcommerz/fail`,
-      cancel_url: `${config.app_base_url}/api/orders/sslcommerz/cancel`,
+      success_url: successUrl,
+      fail_url: failedUrl,
+      cancel_url: cancelUrl,
       ipn_url: `${config.app_base_url}/api/orders/sslcommerz/ipn`,
       shipping_method: "Courier",
       product_name: `Medicine Order ${order.id}`,
@@ -290,13 +359,12 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
       value_b: payload.customerId,
     });
 
-    const response = await fetch(config.sslcommerz.session_api_url as string, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: sessionPayload.toString(),
-    });
+    const response = await initSslCommerzSessionWithRetry(
+      config.sslcommerz.session_api_url as string,
+      sessionPayload.toString(),
+      order.id,
+      transactionId
+    );
 
     const data = (await response.json()) as SslSessionInitResponse;
 
