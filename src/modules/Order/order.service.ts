@@ -2,33 +2,17 @@ import { prisma } from "../../lib/prisma";
 import config from "../../config";
 import type { Prisma } from "../../../generated/prisma/client";
 import { OrderStatus } from "../../../generated/prisma/enums";
+import type {
+  CreateOrderPayload,
+  OrderItem,
+  SslSuccessCallback,
+  SslFailCallback,
+  SslCancelCallback,
+  SslIpnCallback,
+  SslSessionInitResponse,
+} from "../../validations/order.validation";
 
-type OrderItem = {
-  medicineId: string;
-  quantity: number;
-};
-
-type CreateOrderPayload = {
-  customerId: string;
-  shippingAddress: string;
-  items: OrderItem[];
-  paymentMethod?: "COD" | "SSLCOMMERZ";
-};
-
-type SslSessionInitResponse = {
-  status?: string;
-  failedreason?: string;
-  GatewayPageURL?: string;
-  [key: string]: unknown;
-};
-
-type SslCallbackPayload = {
-  tran_id?: string;
-  val_id?: string;
-  status?: string;
-  amount?: string;
-  [key: string]: unknown;
-};
+type SslCallbackPayload = SslSuccessCallback | SslFailCallback | SslCancelCallback | SslIpnCallback;
 
 const toInputJson = (value: unknown): Prisma.InputJsonValue => {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -214,7 +198,7 @@ const createOrderWithStockDeduction = async (args: {
   return result;
 };
 
-const createOrderIntoDB = async (payload: CreateOrderPayload) => {
+const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: string }) => {
   const paymentMethod = normalizePaymentMethod(payload.paymentMethod);
 
   await getCustomerForOrder(payload.customerId);
@@ -239,7 +223,7 @@ const createOrderIntoDB = async (payload: CreateOrderPayload) => {
   });
 };
 
-const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload) => {
+const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { customerId: string; paymentMethod: string }) => {
   ensureSslConfig();
 
   const customer = await getCustomerForOrder(payload.customerId);
@@ -402,7 +386,7 @@ const buildClientRedirectUrl = (isSuccess: boolean, transactionId: string, order
   return redirectUrl.toString();
 };
 
-const handleSslCommerzSuccess = async (callbackPayload: SslCallbackPayload) => {
+const handleSslCommerzSuccess = async (callbackPayload: SslSuccessCallback) => {
   ensureSslConfig();
 
   const transactionId = callbackPayload.tran_id;
@@ -433,7 +417,7 @@ const handleSslCommerzSuccess = async (callbackPayload: SslCallbackPayload) => {
   }
 
   const validatorParams = new URLSearchParams({
-    val_id: valId,
+    val_id: valId as string,
     store_id: config.sslcommerz.store_id as string,
     store_passwd: config.sslcommerz.store_password as string,
     format: "json",
@@ -505,19 +489,19 @@ const handleSslCommerzCancel = async (callbackPayload: SslCallbackPayload) => {
   };
 };
 
-const handleSslCommerzIpn = async (callbackPayload: SslCallbackPayload) => {
+const handleSslCommerzIpn = async (callbackPayload: SslIpnCallback) => {
   const status = String(callbackPayload.status || "").toUpperCase();
 
   if (status === "VALID" || status === "VALIDATED") {
-    return handleSslCommerzSuccess(callbackPayload);
+    return handleSslCommerzSuccess(callbackPayload as SslSuccessCallback);
   }
 
   if (status === "FAILED") {
-    return handleSslCommerzFail(callbackPayload);
+    return handleSslCommerzFail(callbackPayload as SslFailCallback);
   }
 
   if (status === "CANCELLED") {
-    return handleSslCommerzCancel(callbackPayload);
+    return handleSslCommerzCancel(callbackPayload as SslCancelCallback);
   }
 
   return {

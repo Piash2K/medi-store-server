@@ -1,5 +1,12 @@
 import { Request, Response } from "express";
 import { OrderService } from "./order.service";
+import {
+  parseOrderPayload,
+  parseSslSuccessCallback,
+  parseSslFailCallback,
+  parseSslCancelCallback,
+  parseSslIpnCallback,
+} from "../../validations/order.validation";
 
 const getCallbackPayload = (req: Request) => {
   return {
@@ -18,8 +25,19 @@ const createOrder = async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate payload
+    const validationResult = parseOrderPayload(req.body);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validationResult.error.flatten(),
+      });
+      return;
+    }
+
     const result = await OrderService.createOrderIntoDB({
-      ...req.body,
+      ...validationResult.data,
       customerId: req.user.id,
     });
 
@@ -46,8 +64,19 @@ const createSslCommerzSession = async (req: Request, res: Response) => {
       return;
     }
 
+    // Validate payload
+    const validationResult = parseOrderPayload(req.body);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validationResult.error.flatten(),
+      });
+      return;
+    }
+
     const result = await OrderService.createSslCommerzSessionIntoDB({
-      ...req.body,
+      ...validationResult.data,
       customerId: req.user.id,
       paymentMethod: "SSLCOMMERZ",
     });
@@ -68,7 +97,19 @@ const createSslCommerzSession = async (req: Request, res: Response) => {
 const sslCommerzSuccess = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
-    const result = await OrderService.handleSslCommerzSuccess(callbackPayload);
+
+    // Validate callback payload
+    const validationResult = parseSslSuccessCallback(callbackPayload);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid success callback payload",
+        errors: validationResult.error.flatten(),
+      });
+      return;
+    }
+
+    const result = await OrderService.handleSslCommerzSuccess(validationResult.data);
 
     if (result.redirectUrl) {
       res.redirect(result.redirectUrl);
@@ -91,7 +132,19 @@ const sslCommerzSuccess = async (req: Request, res: Response) => {
 const sslCommerzFail = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
-    const result = await OrderService.handleSslCommerzFail(callbackPayload);
+
+    // Validate callback payload
+    const validationResult = parseSslFailCallback(callbackPayload);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid fail callback payload",
+        errors: validationResult.error.flatten(),
+      });
+      return;
+    }
+
+    const result = await OrderService.handleSslCommerzFail(validationResult.data);
 
     if (result.redirectUrl) {
       res.redirect(result.redirectUrl);
@@ -114,7 +167,19 @@ const sslCommerzFail = async (req: Request, res: Response) => {
 const sslCommerzCancel = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
-    const result = await OrderService.handleSslCommerzCancel(callbackPayload);
+
+    // Validate callback payload
+    const validationResult = parseSslCancelCallback(callbackPayload);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid cancel callback payload",
+        errors: validationResult.error.flatten(),
+      });
+      return;
+    }
+
+    const result = await OrderService.handleSslCommerzCancel(validationResult.data);
 
     if (result.redirectUrl) {
       res.redirect(result.redirectUrl);
@@ -137,7 +202,19 @@ const sslCommerzCancel = async (req: Request, res: Response) => {
 const sslCommerzIpn = async (req: Request, res: Response) => {
   try {
     const callbackPayload = getCallbackPayload(req);
-    const result = await OrderService.handleSslCommerzIpn(callbackPayload);
+
+    // Validate callback payload
+    const validationResult = parseSslIpnCallback(callbackPayload);
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid IPN callback payload",
+        errors: validationResult.error.flatten(),
+      });
+      return;
+    }
+
+    const result = await OrderService.handleSslCommerzIpn(validationResult.data);
 
     res.status(200).json({
       success: true,
