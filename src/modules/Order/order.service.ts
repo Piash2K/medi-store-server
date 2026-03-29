@@ -1,5 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import config from "../../config";
+import { logger } from "../../lib/logger";
+import { paymentLogger } from "../../lib/paymentLogger";
 import type { Prisma } from "../../../generated/prisma/client";
 import { OrderStatus } from "../../../generated/prisma/enums";
 import type {
@@ -245,6 +247,16 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
     transactionId,
   });
 
+  // Log session initialization
+  paymentLogger.logSessionInit({
+    orderId: order.id,
+    transactionId,
+    customerId: payload.customerId,
+    amount: totalAmount,
+    email: customer.email,
+    phone: customer.phone || undefined,
+  });
+
   try {
     const sessionPayload = new URLSearchParams({
       store_id: config.sslcommerz.store_id as string,
@@ -289,10 +301,23 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
     const data = (await response.json()) as SslSessionInitResponse;
 
     if (!response.ok) {
+      paymentLogger.logApiError({
+        orderId: order.id,
+        transactionId,
+        apiCall: "SSLCommerz Session Initialization",
+        error: "API returned non-OK status",
+        statusCode: response.status,
+      });
       throw new Error(`SSLCommerz session API failed: ${response.status}`);
     }
 
     if (data.status !== "SUCCESS" || !data.GatewayPageURL) {
+      paymentLogger.logApiError({
+        orderId: order.id,
+        transactionId,
+        apiCall: "SSLCommerz Session Initialization",
+        error: data.failedreason || "Unable to initialize SSLCommerz session",
+      });
       throw new Error(data.failedreason || "Unable to initialize SSLCommerz session");
     }
 
@@ -312,8 +337,15 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
       sslcommerz: data,
     };
   } catch (error) {
+    const errorMessage = (error as Error).message;
+    paymentLogger.logApiError({
+      orderId: order.id,
+      transactionId,
+      apiCall: "SSLCommerz Session Initialization",
+      error: errorMessage,
+    });
     await markPaymentFailedAndRestoreStock(transactionId, "FAILED", {
-      error: (error as Error).message,
+      error: errorMessage,
       source: "session-init",
     });
     throw error;
@@ -369,6 +401,15 @@ const markPaymentFailedAndRestoreStock = async (
         },
       });
     }
+
+    // Log stock restoration
+    const reason = paymentStatus === "FAILED" ? "PAYMENT_FAILED" : "PAYMENT_CANCELLED";
+    paymentLogger.logStockRestoration({
+      orderId: order.id,
+      transactionId,
+      reason,
+      itemsCount: order.items.length,
+    });
 
     return updated;
   });
@@ -438,6 +479,18 @@ const handleSslCommerzSuccess = async (callbackPayload: SslSuccessCallback) => {
   const tranMatches = validatedTranId === transactionId;
 
   if (!validateResponse.ok || !isValidStatus || !amountMatches || !tranMatches) {
+    paymentLogger.logValidationError({
+      orderId: order.id,
+      transactionId,
+      error: "Payment validation failed",
+      callbackData: {
+        isValidStatus,
+        amountMatches,
+        tranMatches,
+        validatedStatus,
+        validatedAmount,
+      },
+    });
     await markPaymentFailedAndRestoreStock(transactionId, "FAILED", {
       callbackPayload,
       validation,
@@ -456,6 +509,17 @@ const handleSslCommerzSuccess = async (callbackPayload: SslSuccessCallback) => {
     },
   });
 
+  // Log successful payment
+  paymentLogger.logPaymentSuccess({
+    orderId: updatedOrder.id,
+    transactionId,
+    customerId: order.customerId,
+    amount: order.totalAmount,
+    valId: valId as string,
+    bankTranId: String(validation.bank_tran_id || ""),
+    cardType: String(validation.card_type || ""),
+  });
+
   return {
     order: updatedOrder,
     redirectUrl: buildClientRedirectUrl(true, transactionId, updatedOrder.id),
@@ -469,10 +533,32 @@ const handleSslCommerzFail = async (callbackPayload: SslCallbackPayload) => {
     throw new Error("tran_id is required in SSLCommerz fail callback");
   }
 
-  const order = await markPaymentFailedAndRestoreStock(transactionId, "FAILED", callbackPayload);
+  const order = await prisma.order.findFirst({
+    where: { transactionId },
+  });
+
+  // Log payment failure
+  if (order) {
+    paymentLogger.logPaymentFailure({
+      orderId: order.id,
+      transactionId,
+      customerId: order.customerId,
+      amount: order.totalAmount,
+      reason: callbackPayload.reason ? String(callbackPayload.reason) : undefined,
+    });
+  } else {
+    paymentLogger.logValidationError({
+      transactionId,
+      apiCall: "handleSslCommerzFail" as any,
+      error: "Order not found for transaction",
+      callbackData: callbackPayload,
+    } as any);
+  }
+
+  const failedOrder = await markPaymentFailedAndRestoreStock(transactionId, "FAILED", callbackPayload);
   return {
-    order,
-    redirectUrl: buildClientRedirectUrl(false, transactionId, order.id),
+    order: failedOrder,
+    redirectUrl: buildClientRedirectUrl(false, transactionId, failedOrder.id),
   };
 };
 
@@ -482,15 +568,37 @@ const handleSslCommerzCancel = async (callbackPayload: SslCallbackPayload) => {
     throw new Error("tran_id is required in SSLCommerz cancel callback");
   }
 
-  const order = await markPaymentFailedAndRestoreStock(transactionId, "CANCELLED", callbackPayload);
+  const order = await prisma.order.findFirst({
+    where: { transactionId },
+  });
+
+  // Log payment cancellation
+  if (order) {
+    paymentLogger.logPaymentCancellation({
+      orderId: order.id,
+      transactionId,
+      customerId: order.customerId,
+      amount: order.totalAmount,
+    });
+  }
+
+  const cancelledOrder = await markPaymentFailedAndRestoreStock(transactionId, "CANCELLED", callbackPayload);
   return {
-    order,
-    redirectUrl: buildClientRedirectUrl(false, transactionId, order.id),
+    order: cancelledOrder,
+    redirectUrl: buildClientRedirectUrl(false, transactionId, cancelledOrder.id),
   };
 };
 
 const handleSslCommerzIpn = async (callbackPayload: SslIpnCallback) => {
   const status = String(callbackPayload.status || "").toUpperCase();
+
+  // Log IPN callback
+  paymentLogger.logIPNCallback({
+    transactionId: callbackPayload.tran_id,
+    status: callbackPayload.status || "UNKNOWN",
+    amount: callbackPayload.amount ? Number(callbackPayload.amount) : undefined,
+    valId: callbackPayload.val_id,
+  });
 
   if (status === "VALID" || status === "VALIDATED") {
     return handleSslCommerzSuccess(callbackPayload as SslSuccessCallback);
@@ -503,6 +611,10 @@ const handleSslCommerzIpn = async (callbackPayload: SslIpnCallback) => {
   if (status === "CANCELLED") {
     return handleSslCommerzCancel(callbackPayload as SslCancelCallback);
   }
+
+  logger.warn(`IPN ignored for status: ${status || "UNKNOWN"}`, {
+    transactionId: callbackPayload.tran_id,
+  });
 
   return {
     message: `IPN ignored for status: ${status || "UNKNOWN"}`,
