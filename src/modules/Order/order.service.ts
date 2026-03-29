@@ -501,6 +501,7 @@ const handleSslCommerzSuccess = async (callbackPayload: SslSuccessCallback) => {
   const updatedOrder = await prisma.order.update({
     where: { id: order.id },
     data: {
+      status: "PROCESSING", // Auto-transition on successful payment
       paymentStatus: "PAID",
       paymentGatewayData: toInputJson({
         callbackPayload,
@@ -518,6 +519,15 @@ const handleSslCommerzSuccess = async (callbackPayload: SslSuccessCallback) => {
     valId: valId as string,
     bankTranId: String(validation.bank_tran_id || ""),
     cardType: String(validation.card_type || ""),
+  });
+
+  // Log order status transition
+  logger.info('Order status automatically transitioned', {
+    orderId: updatedOrder.id,
+    previousStatus: order.status,
+    newStatus: updatedOrder.status,
+    paymentStatus: updatedOrder.paymentStatus,
+    transactionId,
   });
 
   return {
