@@ -196,10 +196,39 @@ const clearCartIntoDB = async (userId: string) => {
   return { message: "Cart cleared successfully" };
 };
 
+const removeMultipleFromCartIntoDB = async (userId: string, medicineIds: string[]) => {
+  if (!cartStore.has(userId) || medicineIds.length === 0) {
+    return {
+      removedMedicineIds: [] as string[],
+      message: "No cart items removed",
+    };
+  }
+
+  const userCart = cartStore.get(userId)!;
+  const removedMedicineIds: string[] = [];
+
+  for (const medicineId of medicineIds) {
+    if (userCart.has(medicineId)) {
+      userCart.delete(medicineId);
+      removedMedicineIds.push(medicineId);
+    }
+  }
+
+  if (userCart.size === 0) {
+    cartStore.delete(userId);
+  }
+
+  return {
+    removedMedicineIds,
+    message: removedMedicineIds.length > 0 ? "Selected items removed from cart" : "No cart items removed",
+  };
+};
+
 export const CartService = {
   getCartForUser,
   addToCartIntoDB,
   updateCartItemIntoDB,
   removeFromCartIntoDB,
   clearCartIntoDB,
+  removeMultipleFromCartIntoDB,
 };

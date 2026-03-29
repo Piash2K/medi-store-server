@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 import config from "../../config";
 import { logger } from "../../lib/logger";
 import { paymentLogger } from "../../lib/paymentLogger";
+import { CartService } from "../Cart/cart.service";
 import type { Prisma } from "../../../generated/prisma/client";
 import { OrderStatus } from "../../../generated/prisma/enums";
 import type {
@@ -280,7 +281,7 @@ const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: str
     throw new Error("Use /api/orders/sslcommerz/init for SSLCOMMERZ payments");
   }
 
-  return createOrderWithStockDeduction({
+  const order = await createOrderWithStockDeduction({
     customerId: payload.customerId,
     shippingAddress: payload.shippingAddress,
     totalAmount,
@@ -288,6 +289,21 @@ const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: str
     paymentMethod: "COD",
     paymentStatus: "COD",
   });
+
+  try {
+    await CartService.removeMultipleFromCartIntoDB(
+      payload.customerId,
+      orderItems.map((item) => item.medicineId)
+    );
+  } catch (error) {
+    logger.warn("Failed to remove ordered items from cart after COD order", {
+      customerId: payload.customerId,
+      orderId: order.id,
+      error: (error as Error).message,
+    });
+  }
+
+  return order;
 };
 
 const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { customerId: string; paymentMethod: string }) => {
@@ -311,6 +327,20 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
     paymentStatus: "PENDING",
     transactionId,
   });
+
+  try {
+    await CartService.removeMultipleFromCartIntoDB(
+      payload.customerId,
+      orderItems.map((item) => item.medicineId)
+    );
+  } catch (error) {
+    logger.warn("Failed to remove ordered items from cart after SSLCommerz order init", {
+      customerId: payload.customerId,
+      orderId: order.id,
+      transactionId,
+      error: (error as Error).message,
+    });
+  }
 
   // Log session initialization
   paymentLogger.logSessionInit({
