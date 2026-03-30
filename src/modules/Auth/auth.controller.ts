@@ -1,9 +1,17 @@
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 
-const createUser = async (req: Request, res: Response) => {
+const createUser = async (req: Request & { file?: Express.Multer.File }, res: Response) => {
   try {
-    const result = await AuthService.createUserIntoDB(req.body);
+    // Extract image URL from Cloudinary if file was uploaded
+    const profileImage = req.file ? req.file.path : null;
+    
+    const userData = {
+      ...req.body,
+      profileImage
+    };
+
+    const result = await AuthService.createUserIntoDB(userData);
     res.status(200).json({
       success: true,
       message: "User created successfully",

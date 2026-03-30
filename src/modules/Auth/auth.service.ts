@@ -2,8 +2,6 @@ import { prisma } from "../../lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-
-
 const createUserIntoDB = async (payload: any) => {
     // Basic validation
     if (!payload.email || !payload.password || !payload.name) {
@@ -35,10 +33,19 @@ const createUserIntoDB = async (payload: any) => {
         }
     }
     const hashPassword = await bcrypt.hash(payload.password, 8);
+    
+    // Extract profileImage URL from multer (set by Cloudinary middleware)
+    const profileImage = payload.profileImage || null;
+    
     const result = await prisma.user.create({
         data: {
-            ...payload,
-            password: hashPassword
+            name: payload.name,
+            email: payload.email,
+            password: hashPassword,
+            phone: payload.phone || null,
+            address: payload.address || null,
+            profileImage: profileImage,
+            role: payload.role || "CUSTOMER"
         }
     });
     const { password, ...rest } = result;

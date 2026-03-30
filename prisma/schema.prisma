@@ -46,6 +46,7 @@ model User {
   password  String
   phone     String?  @unique
   address   String?
+  profileImage String?
   role      Role     @default(CUSTOMER)
   status    Status   @default(UNBAN)
   createdAt DateTime @default(now())

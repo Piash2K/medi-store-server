@@ -266,6 +266,18 @@ const createOrderWithStockDeduction = async (args: {
   return result;
 };
 
+const removeOrderedItemsFromCart = async (customerId: string, medicineIds: string[], context: string) => {
+  try {
+    await CartService.removeMultipleFromCartIntoDB(customerId, medicineIds);
+  } catch (error) {
+    logger.warn(`Failed to remove ordered items from cart after ${context}`, {
+      customerId,
+      medicineIds,
+      error: (error as Error).message,
+    });
+  }
+};
+
 const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: string }) => {
   const paymentMethod = normalizePaymentMethod(payload.paymentMethod);
 
@@ -291,16 +303,13 @@ const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: str
   });
 
   try {
-    await CartService.removeMultipleFromCartIntoDB(
+    await removeOrderedItemsFromCart(
       payload.customerId,
-      orderItems.map((item) => item.medicineId)
+      orderItems.map((item) => item.medicineId),
+      "COD order creation"
     );
-  } catch (error) {
-    logger.warn("Failed to remove ordered items from cart after COD order", {
-      customerId: payload.customerId,
-      orderId: order.id,
-      error: (error as Error).message,
-    });
+  } catch {
+    // no-op: helper logs internally
   }
 
   return order;
@@ -328,19 +337,11 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
     transactionId,
   });
 
-  try {
-    await CartService.removeMultipleFromCartIntoDB(
-      payload.customerId,
-      orderItems.map((item) => item.medicineId)
-    );
-  } catch (error) {
-    logger.warn("Failed to remove ordered items from cart after SSLCommerz order init", {
-      customerId: payload.customerId,
-      orderId: order.id,
-      transactionId,
-      error: (error as Error).message,
-    });
-  }
+  await removeOrderedItemsFromCart(
+    payload.customerId,
+    orderItems.map((item) => item.medicineId),
+    "SSLCommerz order creation"
+  );
 
   // Log session initialization
   paymentLogger.logSessionInit({
