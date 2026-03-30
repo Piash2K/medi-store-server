@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 
 type CreateMedicinePayload = {
   name: string;
+  image?: string;
   description: string;
   manufacturer: string;
   price: number;
@@ -50,6 +51,7 @@ const addMedicineIntoDB = async (payload: CreateMedicinePayload) => {
   const result = await prisma.medicine.create({
     data: {
       name: payload.name,
+      image: payload.image,
       description: payload.description,
       manufacturer: payload.manufacturer,
       price: Number(payload.price),
@@ -76,6 +78,7 @@ type UpdateMedicinePayload = {
   medicineId: string;
   sellerId: string;
   name?: string;
+  image?: string;
   description?: string;
   manufacturer?: string;
   price?: number;
@@ -138,6 +141,7 @@ const updateMedicineIntoDB = async (payload: UpdateMedicinePayload) => {
 
   const updateData: any = {};
   if (payload.name !== undefined) updateData.name = payload.name;
+  if (payload.image !== undefined) updateData.image = payload.image;
   if (payload.description !== undefined) updateData.description = payload.description;
   if (payload.manufacturer !== undefined) updateData.manufacturer = payload.manufacturer;
   if (payload.price !== undefined) updateData.price = Number(payload.price);

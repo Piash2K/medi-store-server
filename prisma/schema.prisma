@@ -78,6 +78,7 @@ model Category {
 model Medicine {
   id           String   @id @default(uuid())
   name         String
+  image        String?
   description  String
   manufacturer String
   price        Float

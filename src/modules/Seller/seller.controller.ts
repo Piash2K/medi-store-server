@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { SellerService } from "./seller.service";
 
-const addMedicine = async (req: Request, res: Response) => {
+const addMedicine = async (req: Request & { file?: Express.Multer.File }, res: Response) => {
   try {
     if (!req.user) {
       res.status(401).json({
@@ -13,6 +13,7 @@ const addMedicine = async (req: Request, res: Response) => {
 
     const result = await SellerService.addMedicineIntoDB({
       ...req.body,
+      image: req.file?.path,
       sellerId: req.user.id,
     });
 
@@ -29,7 +30,7 @@ const addMedicine = async (req: Request, res: Response) => {
   }
 };
 
-const updateMedicine = async (req: Request, res: Response) => {
+const updateMedicine = async (req: Request & { file?: Express.Multer.File }, res: Response) => {
   try {
     if (!req.user) {
       res.status(401).json({
@@ -43,6 +44,7 @@ const updateMedicine = async (req: Request, res: Response) => {
     const result = await SellerService.updateMedicineIntoDB({
       medicineId,
       ...req.body,
+      image: req.file?.path,
       sellerId: req.user.id,
     });
 
