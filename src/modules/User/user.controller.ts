@@ -26,7 +26,7 @@ const getUserProfile = async (req: Request, res: Response) => {
   }
 };
 
-const updateUserProfile = async (req: Request, res: Response) => {
+const updateUserProfile = async (req: Request & { file?: Express.Multer.File }, res: Response) => {
   try {
     if (!req.user) {
       res.status(401).json({
@@ -39,6 +39,7 @@ const updateUserProfile = async (req: Request, res: Response) => {
     const result = await UserService.updateUserProfileIntoDB({
       userId: req.user.id,
       ...req.body,
+      profileImage: req.file?.path,
     });
 
     res.status(200).json({
@@ -54,7 +55,36 @@ const updateUserProfile = async (req: Request, res: Response) => {
   }
 };
 
+const updateProfilePhoto = async (req: Request & { file?: Express.Multer.File }, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+      return;
+    }
+
+    const result = await UserService.updateProfilePhotoIntoDB({
+      userId: req.user.id,
+      profileImage: req.file?.path,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Profile photo updated successfully",
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: (error as Error).message,
+    });
+  }
+};
+
 export const UserController = {
   getUserProfile,
   updateUserProfile,
+  updateProfilePhoto,
 };

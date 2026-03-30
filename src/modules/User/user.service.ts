@@ -7,8 +7,14 @@ type UpdateProfilePayload = {
   email?: string;
   phone?: string;
   address?: string;
+  profileImage?: string;
   currentPassword?: string;
   newPassword?: string;
+};
+
+type UpdateProfilePhotoPayload = {
+  userId: string;
+  profileImage?: string;
 };
 
 const getUserProfileFromDB = async (userId: string) => {
@@ -22,6 +28,7 @@ const getUserProfileFromDB = async (userId: string) => {
       email: true,
       phone: true,
       address: true,
+      profileImage: true,
       role: true,
       status: true,
       createdAt: true,
@@ -96,6 +103,7 @@ const updateUserProfileIntoDB = async (payload: UpdateProfilePayload) => {
   if (payload.email !== undefined) updateData.email = payload.email.trim();
   if (payload.phone !== undefined) updateData.phone = payload.phone.trim();
   if (payload.address !== undefined) updateData.address = payload.address?.trim();
+  if (payload.profileImage !== undefined) updateData.profileImage = payload.profileImage;
   if (payload.newPassword !== undefined) {
     updateData.password = await bcrypt.hash(payload.newPassword, 10);
   }
@@ -111,6 +119,49 @@ const updateUserProfileIntoDB = async (payload: UpdateProfilePayload) => {
       email: true,
       phone: true,
       address: true,
+      profileImage: true,
+      role: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return updatedUser;
+};
+
+const updateProfilePhotoIntoDB = async (payload: UpdateProfilePhotoPayload) => {
+  if (!payload.profileImage) {
+    throw new Error("Profile image file is required");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: payload.userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: {
+      id: payload.userId,
+    },
+    data: {
+      profileImage: payload.profileImage,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      profileImage: true,
       role: true,
       status: true,
       createdAt: true,
@@ -124,4 +175,5 @@ const updateUserProfileIntoDB = async (payload: UpdateProfilePayload) => {
 export const UserService = {
   getUserProfileFromDB,
   updateUserProfileIntoDB,
+  updateProfilePhotoIntoDB,
 };
