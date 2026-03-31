@@ -288,6 +288,7 @@ const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: str
   }
 
   const { totalAmount, orderItems } = await prepareOrderItems(payload);
+  const finalTotalAmount = totalAmount + (payload.shippingCost ?? 0);
 
   if (paymentMethod === "SSLCOMMERZ") {
     throw new Error("Use /api/orders/sslcommerz/init for SSLCOMMERZ payments");
@@ -296,7 +297,7 @@ const createOrderIntoDB = async (payload: CreateOrderPayload & { customerId: str
   const order = await createOrderWithStockDeduction({
     customerId: payload.customerId,
     shippingAddress: payload.shippingAddress,
-    totalAmount,
+    totalAmount: finalTotalAmount,
     orderItems,
     paymentMethod: "COD",
     paymentStatus: "COD",
@@ -325,12 +326,13 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
   }
 
   const { totalAmount, orderItems } = await prepareOrderItems(payload);
+  const finalTotalAmount = totalAmount + (payload.shippingCost ?? 0);
   const transactionId = `ssl_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
   const order = await createOrderWithStockDeduction({
     customerId: payload.customerId,
     shippingAddress: payload.shippingAddress,
-    totalAmount,
+    totalAmount: finalTotalAmount,
     orderItems,
     paymentMethod: "SSLCOMMERZ",
     paymentStatus: "PENDING",
@@ -348,7 +350,7 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
     orderId: order.id,
     transactionId,
     customerId: payload.customerId,
-    amount: totalAmount,
+    amount: finalTotalAmount,
     email: customer.email,
     phone: customer.phone || undefined,
   });
@@ -361,7 +363,7 @@ const createSslCommerzSessionIntoDB = async (payload: CreateOrderPayload & { cus
     const sessionPayload = new URLSearchParams({
       store_id: config.sslcommerz.store_id as string,
       store_passwd: config.sslcommerz.store_password as string,
-      total_amount: totalAmount.toFixed(2),
+      total_amount: finalTotalAmount.toFixed(2),
       currency: "BDT",
       tran_id: transactionId,
       success_url: successUrl,

@@ -8,6 +8,7 @@ export const OrderItemSchema = z.object({
 
 export const CreateOrderPayloadSchema = z.object({
   shippingAddress: z.string().min(5, 'Shipping address must be at least 5 characters').trim(),
+  shippingCost: z.coerce.number().min(0, 'Shipping cost cannot be negative').optional().default(0),
   items: z.array(OrderItemSchema).min(1, 'Order must contain at least one item'),
   paymentMethod: z.enum(['COD', 'SSLCOMMERZ']).optional().default('COD'),
 });
