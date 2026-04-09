@@ -13,15 +13,31 @@ import { CartRoutes } from './modules/Cart/cart.route';
 
 const app: Application = express();
 
+const allowedOrigins = new Set([
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://medi-store-client-wheat.vercel.app",
+]);
+
 // parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://medi-store-client-wheat.vercel.app",
-    ],
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const isAllowedVercelPreview = /^https:\/\/[-a-z0-9]+\.vercel\.app$/i.test(origin);
+      if (allowedOrigins.has(origin) || isAllowedVercelPreview) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
