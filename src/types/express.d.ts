@@ -9,6 +9,7 @@ declare global {
         email: string;
         phone?: string | null;
         address?: string | null;
+        profileImage?: string | null;
         role: "CUSTOMER" | "SELLER" | "ADMIN";
         status: "BAN" | "UNBAN";
         createdAt: Date;

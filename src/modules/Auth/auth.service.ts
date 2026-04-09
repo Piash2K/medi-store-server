@@ -192,6 +192,7 @@ const getMeFromDB = async (token: string) => {
             email: true,
             phone: true,
             address: true,
+            profileImage: true,
             role: true,
             status: true,
             createdAt: true,

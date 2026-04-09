@@ -17,15 +17,21 @@ const getJwtSecret = () => {
   return secret;
 };
 
+const extractTokenFromRequest = (req: Request) => {
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : authHeader;
+  const headerToken = (req.headers["x-access-token"] as string | undefined)?.trim();
+  const cookieToken = (req as any).cookies?.token as string | undefined;
+
+  return bearerToken?.trim() || headerToken || cookieToken;
+};
+
 export const auth = (...roles: Role[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const authHeader = req.headers.authorization;
-      const bearerToken = authHeader?.startsWith("Bearer ")
-        ? authHeader.slice(7)
-        : undefined;
-      const cookieToken = (req as any).cookies?.token as string | undefined;
-      const token = bearerToken || cookieToken;
+      const token = extractTokenFromRequest(req);
 
       if (!token) {
         res.status(401).json({
@@ -56,6 +62,7 @@ export const auth = (...roles: Role[]) => {
           email: true,
           phone: true,
           address: true,
+          profileImage: true,
           role: true,
           status: true,
           createdAt: true,
