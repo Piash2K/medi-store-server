@@ -1,6 +1,25 @@
 import { prisma } from "../../lib/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import getFirebaseAdmin from "../../lib/firebaseAdmin";
+
+type GoogleAuthPayload = {
+    email?: string;
+    name?: string;
+    profileImage?: string;
+    uid?: string;
+    idToken?: string;
+    role?: "CUSTOMER" | "SELLER" | "ADMIN";
+};
+
+const getJwtSecret = () => {
+    const secret = process.env.JWT_SECRET_KEY || process.env.JWT_SECRET;
+    if (!secret) {
+        throw new Error("JWT secret is not configured");
+    }
+    return secret;
+};
 
 const createUserIntoDB = async (payload: any) => {
     // Basic validation
@@ -66,8 +85,89 @@ const loginUserIntoDB = async (payload: any) => {
         throw new Error("Invalid password");
     }
     const { password, ...rest } = user;
-    const token = jwt.sign(rest, process.env.JWT_SECRET_KEY as string, { expiresIn: "1d" });  
+    const token = jwt.sign(rest, getJwtSecret(), { expiresIn: "1d" });
     return { ...rest, token };
+};
+
+const googleAuthIntoDB = async (payload: GoogleAuthPayload) => {
+    const email = payload.email?.trim().toLowerCase();
+    const uid = payload.uid?.trim();
+    const idToken = payload.idToken?.trim();
+
+    if (!email || !uid || !idToken) {
+        throw new Error("email, uid, and idToken are required");
+    }
+
+    let decoded;
+    try {
+        decoded = await getFirebaseAdmin().auth().verifyIdToken(idToken);
+    } catch (error) {
+        throw new Error("Invalid Google token");
+    }
+    const decodedEmail = decoded.email?.trim().toLowerCase();
+
+    if (!decoded || decoded.uid !== uid || decodedEmail !== email) {
+        throw new Error("Invalid Google token");
+    }
+
+    if (!decoded.email_verified) {
+        throw new Error("Google email is not verified");
+    }
+
+    let user = await prisma.user.findUnique({
+        where: { email }
+    });
+
+    if (!user) {
+        const safeRole = payload.role === "SELLER" ? "SELLER" : "CUSTOMER";
+
+        // Keep password non-null for existing schema while preventing local password login.
+        const socialPassword = crypto.randomBytes(32).toString("hex");
+        const hashedSocialPassword = await bcrypt.hash(socialPassword, 8);
+
+        user = await prisma.user.create({
+            data: {
+                email,
+                name: payload.name?.trim() || "Google User",
+                profileImage: payload.profileImage || null,
+                role: safeRole,
+                status: "UNBAN",
+                password: hashedSocialPassword,
+            },
+        });
+    } else {
+        if (user.status === "BAN") {
+            throw new Error("Account is banned");
+        }
+
+        const shouldUpdateName = payload.name && payload.name.trim() && payload.name.trim() !== user.name;
+        const shouldUpdateImage = typeof payload.profileImage === "string" && payload.profileImage !== user.profileImage;
+
+        if (shouldUpdateName || shouldUpdateImage) {
+            user = await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    ...(shouldUpdateName ? { name: payload.name!.trim() } : {}),
+                    ...(shouldUpdateImage ? { profileImage: payload.profileImage } : {}),
+                },
+            });
+        }
+    }
+
+    const tokenPayload = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+    };
+
+    const token = jwt.sign(tokenPayload, getJwtSecret(), {
+        expiresIn: "7d",
+    });
+
+    return {
+        token,
+    };
 };
 
 const getMeFromDB = async (token: string) => {
@@ -77,7 +177,7 @@ const getMeFromDB = async (token: string) => {
 
     let decoded: any;
     try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET_KEY as string);
+        decoded = jwt.verify(token, getJwtSecret());
     } catch (error) {
         throw new Error("Invalid token");
     }
@@ -109,5 +209,6 @@ const getMeFromDB = async (token: string) => {
 export const AuthService = {
   createUserIntoDB,
     loginUserIntoDB,
+        googleAuthIntoDB,
     getMeFromDB
 };

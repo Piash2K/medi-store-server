@@ -31,6 +31,7 @@ app.use(cookieParser());
 // app.use('/api/v1', router);
 
 app.use('/api/auth', AuthRoutes);
+app.use('/auth', AuthRoutes);
 app.use('/api/medicines', MedicineRoutes);
 app.use('/api/categories', CategoryRoutes);
 app.use('/api/seller', SellerRoutes);

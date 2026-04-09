@@ -6,7 +6,7 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 export default {
   port: process.env.PORT,
   database_url: process.env.DATABASE_URL,
-  jwt_secret_key: process.env.JWT_SECRET_KEY,
+  jwt_secret_key: process.env.JWT_SECRET_KEY || process.env.JWT_SECRET,
   app_base_url: process.env.APP_BASE_URL,
   client_success_url: process.env.CLIENT_PAYMENT_SUCCESS_URL,
   client_failed_url: process.env.CLIENT_PAYMENT_FAILED_URL,

@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.post("/register", upload.single("profileImage"), AuthController.createUser);
 router.post("/login", AuthController.loginUser);
+router.post("/google", AuthController.googleAuth);
 router.get("/me", auth(), AuthController.getMe);
 
 export const AuthRoutes = router;

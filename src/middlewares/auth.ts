@@ -9,6 +9,14 @@ type DecodedToken = {
   role?: Role;
 };
 
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET_KEY || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT secret is not configured");
+  }
+  return secret;
+};
+
 export const auth = (...roles: Role[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -29,7 +37,7 @@ export const auth = (...roles: Role[]) => {
 
       let decoded: DecodedToken;
       try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET_KEY as string) as DecodedToken;
+        decoded = jwt.verify(token, getJwtSecret()) as DecodedToken;
       } catch (error) {
         res.status(401).json({
           success: false,

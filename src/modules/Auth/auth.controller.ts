@@ -45,6 +45,38 @@ const loginUser = async (req: Request, res: Response) => {
   }
 };
 
+const googleAuth = async (req: Request, res: Response) => {
+  try {
+    const result = await AuthService.googleAuthIntoDB(req.body);
+    res.cookie("token", result.token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Google authentication successful",
+      data: {
+        token: result.token,
+      },
+    });
+  } catch (error) {
+    const message = (error as Error).message || "Google authentication failed";
+    const statusCode =
+      message === "email, uid, and idToken are required"
+        ? 400
+        : message === "Invalid Google token" || message === "Google email is not verified"
+        ? 401
+        : 400;
+
+    res.status(statusCode).json({
+      success: false,
+      message,
+    });
+  }
+};
+
 const getMe = async (req: Request, res: Response) => {
   try {
     if (req.user) {
@@ -81,5 +113,6 @@ const getMe = async (req: Request, res: Response) => {
 export const AuthController = {
   createUser,
   loginUser,
+  googleAuth,
   getMe,
 };
