@@ -66,7 +66,7 @@ const googleAuth = async (req: Request, res: Response) => {
   } catch (error) {
     const message = (error as Error).message || "Google authentication failed";
     const statusCode =
-      message === "email, uid, and idToken are required"
+      message === "email and idToken are required"
         ? 400
         : message === "Account is banned"
         ? 403

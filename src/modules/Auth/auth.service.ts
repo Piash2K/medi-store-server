@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import getFirebaseAdmin from "../../lib/firebaseAdmin";
+import { OAuth2Client } from "google-auth-library";
 
 type GoogleAuthPayload = {
     email?: string;
@@ -10,7 +11,15 @@ type GoogleAuthPayload = {
     profileImage?: string;
     uid?: string;
     idToken?: string;
+    token?: string;
+    credential?: string;
     role?: "CUSTOMER" | "SELLER" | "ADMIN";
+};
+
+type VerifiedGoogleIdentity = {
+    uid: string;
+    email: string;
+    emailVerified: boolean;
 };
 
 const getJwtSecret = () => {
@@ -19,6 +28,54 @@ const getJwtSecret = () => {
         throw new Error("JWT secret is not configured");
     }
     return secret;
+};
+
+const getGoogleClientIds = () => {
+    const rawValue = process.env.GOOGLE_CLIENT_ID;
+    if (!rawValue) {
+        return [];
+    }
+
+    return rawValue
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+};
+
+const verifyGoogleIdentityToken = async (token: string): Promise<VerifiedGoogleIdentity> => {
+    try {
+        const decoded = await getFirebaseAdmin().auth().verifyIdToken(token);
+        const email = decoded.email?.trim().toLowerCase();
+
+        if (!email) {
+            throw new Error("Invalid Google token");
+        }
+
+        return {
+            uid: decoded.uid,
+            email,
+            emailVerified: !!decoded.email_verified,
+        };
+    } catch (firebaseError) {
+        const oauthClient = new OAuth2Client();
+        const clientIds = getGoogleClientIds();
+        const verificationOptions = clientIds.length
+            ? { idToken: token, audience: clientIds }
+            : { idToken: token };
+
+        const ticket = await oauthClient.verifyIdToken(verificationOptions);
+        const payload = ticket.getPayload();
+
+        if (!payload?.sub || !payload.email) {
+            throw new Error("Invalid Google token");
+        }
+
+        return {
+            uid: payload.sub,
+            email: payload.email.trim().toLowerCase(),
+            emailVerified: !!payload.email_verified,
+        };
+    }
 };
 
 const createUserIntoDB = async (payload: any) => {
@@ -92,25 +149,28 @@ const loginUserIntoDB = async (payload: any) => {
 const googleAuthIntoDB = async (payload: GoogleAuthPayload) => {
     const email = payload.email?.trim().toLowerCase();
     const uid = payload.uid?.trim();
-    const idToken = payload.idToken?.trim();
+    const idToken = payload.idToken?.trim() || payload.credential?.trim() || payload.token?.trim();
 
-    if (!email || !uid || !idToken) {
-        throw new Error("email, uid, and idToken are required");
+    if (!email || !idToken) {
+        throw new Error("email and idToken are required");
     }
 
-    let decoded;
+    let verifiedIdentity: VerifiedGoogleIdentity;
     try {
-        decoded = await getFirebaseAdmin().auth().verifyIdToken(idToken);
+        verifiedIdentity = await verifyGoogleIdentityToken(idToken);
     } catch (error) {
         throw new Error("Invalid Google token");
     }
-    const decodedEmail = decoded.email?.trim().toLowerCase();
 
-    if (!decoded || decoded.uid !== uid || decodedEmail !== email) {
+    if (verifiedIdentity.email !== email) {
         throw new Error("Invalid Google token");
     }
 
-    if (!decoded.email_verified) {
+    if (uid && verifiedIdentity.uid !== uid) {
+        throw new Error("Invalid Google token");
+    }
+
+    if (!verifiedIdentity.emailVerified) {
         throw new Error("Google email is not verified");
     }
 
